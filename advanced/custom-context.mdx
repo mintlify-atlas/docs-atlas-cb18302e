@@ -62,7 +62,7 @@ import { customContext } from '../context';
 @Options([])
 export default class AdminCommand extends Command {
   // Extend the context type
-  async run(ctx: typeof customContext) {
+  async run(ctx: CommandContext & ReturnType<typeof customContext>) {
     // Access custom properties
     if (!ctx.isOwner()) {
       return ctx.write({
@@ -407,7 +407,7 @@ export const customContext = extendContext((interaction) => {
 
 // Use in command - full type safety
 export default class MyCommand extends Command {
-  async run(ctx: typeof customContext) {
+  async run(ctx: CommandContext & ReturnType<typeof customContext>) {
     // ✅ TypeScript knows about customProp and customMethod
     const value = ctx.customProp;
     const result = ctx.customMethod();
@@ -485,7 +485,7 @@ import { customContext } from '../context';
 export default class MyButton extends ComponentCommand {
   componentType = 'Button' as const;
   
-  async run(ctx: typeof customContext) {
+  async run(ctx: CommandContext & ReturnType<typeof customContext>) {
     // Same extended context available
     if (ctx.isOwner()) {
       // ...
@@ -499,7 +499,7 @@ import { ModalCommand } from 'seyfert';
 import { customContext } from '../context';
 
 export default class MyModal extends ModalCommand {
-  async run(ctx: typeof customContext) {
+  async run(ctx: CommandContext & ReturnType<typeof customContext>) {
     // Same extended context available
     await ctx.write({
       content: `Thanks for submitting, ${ctx.botOwner}!`

@@ -261,8 +261,7 @@ DISCORD_APPLICATION_ID=your_application_id_here
 Create `src/seyfert.config.ts`:
 
 ```typescript src/seyfert.config.ts
-import { config } from 'seyfert';
-import { GatewayIntentBits } from 'seyfert/types';
+import { config, GatewayIntentBits } from 'seyfert';
 
 export default config.bot({
   token: process.env.DISCORD_TOKEN ?? '',
