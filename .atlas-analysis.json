@@ -1,0 +1,185 @@
+{
+  "projectType": "framework",
+  "projectName": "Seyfert",
+  "projectDescription": "An advanced TypeScript framework for building Discord bots with powerful caching, sharding, and developer experience.",
+  "theme": "aspen",
+  "primaryColor": "#169bb0",
+  "lightColor": "#042650",
+  "darkColor": "#64af4f",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/client",
+              "concepts/commands",
+              "concepts/events",
+              "concepts/components",
+              "concepts/cache"
+            ]
+          },
+          {
+            "group": "Commands",
+            "pages": [
+              "commands/chat-commands",
+              "commands/context-menus",
+              "commands/options",
+              "commands/decorators",
+              "commands/middleware"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "components/buttons",
+              "components/select-menus",
+              "components/modals",
+              "components/text-inputs"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/sharding",
+              "advanced/workers",
+              "advanced/cache-adapters",
+              "advanced/custom-context",
+              "advanced/http-only"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/error-handling",
+              "guides/localization",
+              "guides/collectors",
+              "guides/deployment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Client",
+            "pages": [
+              "api/client/base-client",
+              "api/client/client",
+              "api/client/worker-client",
+              "api/client/http-client"
+            ]
+          },
+          {
+            "group": "Commands",
+            "pages": [
+              "api/commands/command",
+              "api/commands/command-context",
+              "api/commands/menu-command",
+              "api/commands/entry-point"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "api/components/component-command",
+              "api/components/modal-command",
+              "api/components/component-context"
+            ]
+          },
+          {
+            "group": "Structures",
+            "pages": [
+              "api/structures/guild",
+              "api/structures/channel",
+              "api/structures/message",
+              "api/structures/user",
+              "api/structures/interaction"
+            ]
+          },
+          {
+            "group": "Builders",
+            "pages": [
+              "api/builders/embed",
+              "api/builders/button",
+              "api/builders/select-menu",
+              "api/builders/modal",
+              "api/builders/action-row"
+            ]
+          },
+          {
+            "group": "Cache",
+            "pages": [
+              "api/cache/cache",
+              "api/cache/adapters",
+              "api/cache/resources"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/utils/collection",
+              "api/utils/logger",
+              "api/utils/formatter",
+              "api/utils/permissions"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Low memory usage with advanced caching",
+    "Type-safe command and event handling",
+    "Built-in sharding and worker support",
+    "Powerful middleware system",
+    "Rich builder API for Discord components",
+    "Flexible cache adapters",
+    "First-class TypeScript support",
+    "HTTP-only mode for serverless deployments"
+  ],
+  "publicApiSurface": [
+    "Client",
+    "BaseClient",
+    "WorkerClient",
+    "HttpClient",
+    "Command",
+    "SubCommand",
+    "ContextMenuCommand",
+    "ComponentCommand",
+    "ModalCommand",
+    "CommandContext",
+    "ComponentContext",
+    "ModalContext",
+    "createEvent",
+    "config.bot",
+    "config.http",
+    "extendContext",
+    "Embed",
+    "Button",
+    "SelectMenu",
+    "Modal",
+    "ActionRow",
+    "Cache",
+    "MemoryAdapter",
+    "Collection",
+    "LimitedCollection",
+    "ShardManager",
+    "WorkerManager",
+    "Logger",
+    "Formatter",
+    "PermissionStrings",
+    "GatewayIntentBits"
+  ]
+}
