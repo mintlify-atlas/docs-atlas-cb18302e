@@ -1,0 +1,503 @@
+---
+title: 'Select Menus'
+description: 'Create dropdown select menus for user, role, channel, and string selections'
+icon: 'list-dropdown'
+---
+
+Select menus allow users to choose one or more options from a dropdown list. Seyfert provides type-safe builders for all Discord select menu types.
+
+## Select Menu Types
+
+Seyfert supports five types of select menus:
+
+- **String Select** - Custom string options
+- **User Select** - Select Discord users
+- **Role Select** - Select Discord roles
+- **Channel Select** - Select Discord channels
+- **Mentionable Select** - Select users or roles
+
+## String Select Menus
+
+Create select menus with custom string options:
+
+```typescript
+import { StringSelectMenu, StringSelectOption, ActionRow } from 'seyfert';
+
+const select = new StringSelectMenu()
+  .setCustomId('fruit-select')
+  .setPlaceholder('Choose a fruit')
+  .addOption(
+    new StringSelectOption()
+      .setLabel('Apple')
+      .setValue('apple')
+      .setDescription('A red fruit')
+      .setEmoji('🍎')
+  )
+  .addOption(
+    new StringSelectOption()
+      .setLabel('Banana')
+      .setValue('banana')
+      .setDescription('A yellow fruit')
+      .setEmoji('🍌')
+  );
+
+const row = new ActionRow<StringSelectMenu>().addComponents(select);
+```
+
+### Setting Multiple Options
+
+Set all options at once:
+
+```typescript
+const options = [
+  new StringSelectOption()
+    .setLabel('Option 1')
+    .setValue('opt1'),
+  new StringSelectOption()
+    .setLabel('Option 2')
+    .setValue('opt2'),
+  new StringSelectOption()
+    .setLabel('Option 3')
+    .setValue('opt3')
+];
+
+const select = new StringSelectMenu()
+  .setCustomId('options')
+  .setOptions(options);
+```
+
+### Default Options
+
+Mark options as selected by default:
+
+```typescript
+const defaultOption = new StringSelectOption()
+  .setLabel('Default Choice')
+  .setValue('default')
+  .setDefault(true);  // This option is selected by default
+```
+
+## User Select Menus
+
+Allow users to select Discord members:
+
+```typescript
+import { UserSelectMenu, ActionRow } from 'seyfert';
+
+const userSelect = new UserSelectMenu()
+  .setCustomId('select-user')
+  .setPlaceholder('Select a user')
+  .setValuesLength({ min: 1, max: 5 });  // Allow 1-5 selections
+
+const row = new ActionRow<UserSelectMenu>().addComponents(userSelect);
+```
+
+### Default Users
+
+Set default selected users:
+
+```typescript
+const userSelect = new UserSelectMenu()
+  .setCustomId('select-moderators')
+  .setDefaultUsers('123456789', '987654321');  // User IDs
+
+// Add more default users
+userSelect.addDefaultUsers('555555555');
+```
+
+## Role Select Menus
+
+Allow users to select Discord roles:
+
+```typescript
+import { RoleSelectMenu, ActionRow } from 'seyfert';
+
+const roleSelect = new RoleSelectMenu()
+  .setCustomId('select-role')
+  .setPlaceholder('Choose your roles')
+  .setValuesLength({ min: 1, max: 10 });
+
+const row = new ActionRow<RoleSelectMenu>().addComponents(roleSelect);
+```
+
+### Default Roles
+
+Set default selected roles:
+
+```typescript
+const roleSelect = new RoleSelectMenu()
+  .setCustomId('notification-roles')
+  .setDefaultRoles('123456789', '987654321');  // Role IDs
+
+// Add more default roles
+roleSelect.addDefaultRoles('555555555');
+```
+
+## Channel Select Menus
+
+Allow users to select Discord channels:
+
+```typescript
+import { ChannelSelectMenu, ChannelType, ActionRow } from 'seyfert';
+
+const channelSelect = new ChannelSelectMenu()
+  .setCustomId('select-channel')
+  .setPlaceholder('Select a channel')
+  .setChannelTypes([
+    ChannelType.GuildText,
+    ChannelType.GuildVoice
+  ]);
+
+const row = new ActionRow<ChannelSelectMenu>().addComponents(channelSelect);
+```
+
+### Default Channels
+
+Set default selected channels:
+
+```typescript
+const channelSelect = new ChannelSelectMenu()
+  .setCustomId('log-channels')
+  .setDefaultChannels('123456789', '987654321');  // Channel IDs
+
+// Add more default channels
+channelSelect.addDefaultChannels('555555555');
+```
+
+## Mentionable Select Menus
+
+Allow users to select either users or roles:
+
+```typescript
+import { MentionableSelectMenu, ActionRow, SelectMenuDefaultValueType } from 'seyfert';
+
+const mentionableSelect = new MentionableSelectMenu()
+  .setCustomId('select-mentionable')
+  .setPlaceholder('Select users or roles')
+  .setValuesLength({ min: 1, max: 25 });
+
+const row = new ActionRow<MentionableSelectMenu>()
+  .addComponents(mentionableSelect);
+```
+
+### Default Mentionables
+
+Set default selected users and roles:
+
+```typescript
+const mentionableSelect = new MentionableSelectMenu()
+  .setCustomId('mention-select')
+  .setDefaultMentionables(
+    { id: '123456789', type: 'User' },
+    { id: '987654321', type: 'Role' }
+  );
+
+// Add more
+mentionableSelect.addDefaultMentionables(
+  { id: '555555555', type: 'User' }
+);
+```
+
+## Common Properties
+
+### Custom ID
+
+Set a unique identifier (max 100 characters):
+
+```typescript
+select.setCustomId('my-select-menu');
+```
+
+### Placeholder
+
+Set placeholder text when nothing is selected (max 150 characters):
+
+```typescript
+select.setPlaceholder('Choose an option...');
+```
+
+### Values Length
+
+Control how many items can be selected:
+
+```typescript
+// Exactly one selection (default)
+select.setValuesLength({ min: 1, max: 1 });
+
+// Multiple selections
+select.setValuesLength({ min: 1, max: 5 });
+
+// Optional selection
+select.setValuesLength({ min: 0, max: 3 });
+```
+
+<Note>
+  The maximum number of selectable items is 25.
+</Note>
+
+### Disabled State
+
+Disable the select menu:
+
+```typescript
+select.setDisabled(true);
+
+// Re-enable
+select.setDisabled(false);
+```
+
+### Required in Modals
+
+Mark a select menu as required in a modal:
+
+```typescript
+select.setRequired(true);
+```
+
+## Sending Select Menus
+
+Attach select menus to messages using action rows:
+
+```typescript
+import { ActionRow, StringSelectMenu, StringSelectOption } from 'seyfert';
+
+const select = new StringSelectMenu()
+  .setCustomId('category-select')
+  .setPlaceholder('Choose a category')
+  .addOption(
+    new StringSelectOption()
+      .setLabel('General')
+      .setValue('general')
+  )
+  .addOption(
+    new StringSelectOption()
+      .setLabel('Support')
+      .setValue('support')
+  );
+
+const row = new ActionRow<StringSelectMenu>().addComponents(select);
+
+await interaction.write({
+  content: 'Select a category:',
+  components: [row]
+});
+```
+
+<Warning>
+  Each action row can only contain one select menu. You can have up to 5 action rows per message.
+</Warning>
+
+## Handling Select Menu Interactions
+
+Create a component command to handle select menu interactions:
+
+```typescript
+import { ComponentCommand, ComponentType } from 'seyfert';
+import type { ComponentContext } from 'seyfert';
+import { StringSelectMenuComponent } from 'seyfert';
+
+export default class FruitSelect extends ComponentCommand {
+  componentType = ComponentType.StringSelect as const;
+  customId = 'fruit-select';
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const selected = ctx.values;  // Array of selected values
+    
+    await ctx.write({
+      content: `You selected: ${selected.join(', ')}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### User Select Handler
+
+```typescript
+import { UserSelectMenuComponent } from 'seyfert';
+
+export default class UserSelectHandler extends ComponentCommand {
+  componentType = ComponentType.UserSelect as const;
+  customId = 'select-user';
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const userIds = ctx.values;  // Array of user IDs
+    const users = await Promise.all(
+      userIds.map(id => ctx.client.users.fetch(id))
+    );
+    
+    await ctx.write({
+      content: `Selected users: ${users.map(u => u.username).join(', ')}`
+    });
+  }
+}
+```
+
+### Role Select Handler
+
+```typescript
+import { RoleSelectMenuComponent } from 'seyfert';
+
+export default class RoleSelectHandler extends ComponentCommand {
+  componentType = ComponentType.RoleSelect as const;
+  customId = 'select-role';
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const roleIds = ctx.values;  // Array of role IDs
+    const guild = await ctx.client.guilds.fetch(ctx.guildId!);
+    const roles = roleIds.map(id => guild.roles.cache.get(id));
+    
+    await ctx.write({
+      content: `Selected roles: ${roles.map(r => r?.name).join(', ')}`
+    });
+  }
+}
+```
+
+### Channel Select Handler
+
+```typescript
+import { ChannelSelectMenuComponent } from 'seyfert';
+
+export default class ChannelSelectHandler extends ComponentCommand {
+  componentType = ComponentType.ChannelSelect as const;
+  customId = 'select-channel';
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const channelIds = ctx.values;  // Array of channel IDs
+    
+    await ctx.write({
+      content: `Selected ${channelIds.length} channel(s)`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Accessing Select Menu Data
+
+Retrieve select menu information from the context:
+
+```typescript
+import { StringSelectMenuComponent } from 'seyfert';
+
+async run(ctx: ComponentContext<typeof this.componentType>) {
+  const menu = ctx.component as StringSelectMenuComponent;
+  
+  console.log(menu.customId);     // Custom ID
+  console.log(menu.placeholder);  // Placeholder text
+  console.log(menu.min);          // Min values
+  console.log(menu.max);          // Max values
+  console.log(menu.disabled);     // Disabled state
+  
+  // For StringSelectMenu only
+  if (this.componentType === ComponentType.StringSelect) {
+    console.log(menu.options);    // Available options
+  }
+  
+  // Selected values
+  console.log(ctx.values);        // Array of selected value IDs
+}
+```
+
+## Pattern Matching
+
+Use regular expressions to handle multiple select menus:
+
+```typescript
+export default class CategorySelect extends ComponentCommand {
+  componentType = ComponentType.StringSelect as const;
+  customId = /^category-select-(.+)$/;
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const page = ctx.customId.match(/^category-select-(.+)$/)?.[1];
+    const selected = ctx.values[0];
+    
+    await ctx.write({
+      content: `Page ${page}: You selected ${selected}`
+    });
+  }
+}
+```
+
+## Complete Example
+
+Here's a full example with a role selection system:
+
+```typescript
+// Command to send select menu
+import { Command } from 'seyfert';
+import { ActionRow, RoleSelectMenu } from 'seyfert';
+
+export default class RoleMenuCommand extends Command {
+  async run(ctx: CommandContext) {
+    const roleSelect = new RoleSelectMenu()
+      .setCustomId('self-roles')
+      .setPlaceholder('Choose your roles')
+      .setValuesLength({ min: 0, max: 5 });
+    
+    const row = new ActionRow<RoleSelectMenu>()
+      .addComponents(roleSelect);
+    
+    await ctx.write({
+      content: 'Select up to 5 roles to assign to yourself:',
+      components: [row]
+    });
+  }
+}
+
+// Component handler
+import { ComponentCommand, ComponentType } from 'seyfert';
+
+export default class SelfRoleSelect extends ComponentCommand {
+  componentType = ComponentType.RoleSelect as const;
+  customId = 'self-roles';
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const selectedRoleIds = ctx.values;
+    const member = ctx.member;
+    
+    if (!member) {
+      return ctx.write({
+        content: 'Could not find member data.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    try {
+      // Add selected roles to member
+      await member.roles.add(selectedRoleIds);
+      
+      await ctx.write({
+        content: `Successfully assigned ${selectedRoleIds.length} role(s)!`,
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      await ctx.write({
+        content: 'Failed to assign roles. Check bot permissions.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+  }
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Limit Options" icon="list">
+    Keep string select options under 25. For more options, consider pagination or filtering.
+  </Card>
+  
+  <Card title="Clear Labels" icon="tag">
+    Use clear, concise labels and descriptions for string select options to guide users.
+  </Card>
+  
+  <Card title="Validate Selections" icon="check">
+    Always validate selected values before processing to ensure data integrity.
+  </Card>
+  
+  <Card title="Provide Feedback" icon="comments">
+    Respond to every select menu interaction to confirm the user's selection.
+  </Card>
+</CardGroup>

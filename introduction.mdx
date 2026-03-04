@@ -1,0 +1,295 @@
+---
+title: "Introduction to Seyfert"
+description: "Learn about Seyfert, the most advanced Discord bot framework built for TypeScript"
+---
+
+## What is Seyfert?
+
+Seyfert is a powerful, modern Discord bot framework built from scratch in TypeScript. Designed for developers who demand performance, type safety, and an exceptional developer experience, Seyfert provides everything you need to build production-ready Discord bots with confidence.
+
+<Note>
+  Seyfert is actively maintained and supports all the latest Discord features as soon as they're available.
+</Note>
+
+## Why Choose Seyfert?
+
+Seyfert stands out from other Discord frameworks with its unique combination of features and philosophy:
+
+### Low Resource Usage
+
+Seyfert is engineered for efficiency with intelligent caching and memory management:
+
+- **Smart Cache Control**: Granular control over what gets cached and how long it's stored
+- **Memory Efficient**: Uses significantly less RAM compared to traditional frameworks
+- **Optimized Data Structures**: Custom collection implementations for better performance
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client({
+  // Disable caching for resources you don't need
+  cache: {
+    disabledCache: {
+      messages: true,  // Don't cache messages
+      presences: true, // Don't cache presence updates
+    }
+  }
+});
+```
+
+### Type-Safe by Design
+
+Full TypeScript support with intelligent type inference throughout:
+
+- **Command Options**: Automatically typed based on your option definitions
+- **Context Extensions**: Type-safe custom context properties
+- **Event Handlers**: Strongly typed event parameters
+- **Builder Pattern**: Type-safe message and component builders
+
+```typescript
+import { Declare, Options, type CommandContext } from 'seyfert';
+import { ApplicationCommandOptionType } from 'seyfert/types';
+
+@Declare({
+  name: 'greet',
+  description: 'Greet a user'
+})
+@Options({
+  user: {
+    type: ApplicationCommandOptionType.User,
+    description: 'User to greet',
+    required: true
+  }
+})
+export class GreetCommand {
+  async run(ctx: CommandContext<typeof this.options>) {
+    // ctx.options.user is automatically typed!
+    const user = ctx.options.user;
+    await ctx.write({ content: `Hello, ${user.username}!` });
+  }
+}
+```
+
+### Built-in Sharding
+
+Scale your bot effortlessly with native sharding support:
+
+- **Automatic Shard Management**: Handles shard lifecycle automatically
+- **Worker-based Sharding**: Distribute shards across worker threads
+- **Resharding Support**: Automatically adjust shard count as your bot grows
+- **Shard-aware Caching**: Cache data efficiently across shards
+
+### Modern Developer Experience
+
+Seyfert provides tools and patterns that make development enjoyable:
+
+- **Decorator-based Commands**: Clean, declarative command definitions
+- **Middleware System**: Reusable logic for authentication, rate limiting, and more
+- **Event System**: Simple, type-safe event handling
+- **File-based Loading**: Automatic discovery of commands and events
+- **Hot Reload**: Reload commands without restarting your bot (in development)
+
+### Latest Discord Features
+
+Seyfert stays up-to-date with Discord's API:
+
+- ✅ Application Commands (Slash Commands, Context Menus)
+- ✅ Message Components (Buttons, Select Menus, Modals)
+- ✅ Threads and Forum Channels
+- ✅ Voice States and Stage Instances
+- ✅ AutoMod Integration
+- ✅ Application Entry Points
+- ✅ Polls and Media Galleries
+
+## Architecture Overview
+
+Seyfert follows a modular architecture that separates concerns and promotes maintainability:
+
+```
+┌─────────────────────────────────────────┐
+│            Your Bot Code                │
+│  (Commands, Events, Components)         │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│         Seyfert Client                  │
+│  • Command Handler                      │
+│  • Event Handler                        │
+│  • Component Handler                    │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│         Gateway/Shard Manager           │
+│  • WebSocket Connections                │
+│  • Shard Distribution                   │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│            Cache Layer                  │
+│  • Memory Adapter (default)             │
+│  • Redis Adapter (optional)             │
+│  • Custom Adapters                      │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│          REST API Handler               │
+│  • Rate Limiting                        │
+│  • Request Queue                        │
+└─────────────────────────────────────────┘
+```
+
+### Core Components
+
+<CardGroup cols={2}>
+  <Card title="Client" icon="robot" href="/concepts/client">
+    The main entry point that manages your bot's lifecycle and coordinates all components.
+  </Card>
+  
+  <Card title="Commands" icon="terminal" href="/concepts/commands">
+    Slash commands, context menus, and message commands with full type safety.
+  </Card>
+  
+  <Card title="Events" icon="bolt" href="/concepts/events">
+    Handle Discord gateway events with a simple, declarative API.
+  </Card>
+  
+  <Card title="Cache" icon="database" href="/concepts/cache">
+    Flexible caching system with multiple adapter options and fine-grained control.
+  </Card>
+</CardGroup>
+
+## Comparison with Other Frameworks
+
+<AccordionGroup>
+  <Accordion title="Seyfert vs Discord.js">
+    **Seyfert Advantages:**
+    - Lower memory usage (50-70% less RAM)
+    - Better TypeScript support with advanced type inference
+    - Built-in sharding from the ground up
+    - More flexible cache control
+    - Modern decorator-based command system
+    
+    **Discord.js Advantages:**
+    - Larger ecosystem and community
+    - More third-party libraries and integrations
+    - Longer track record and stability
+  </Accordion>
+  
+  <Accordion title="Seyfert vs Other Frameworks">
+    Seyfert differentiates itself by:
+    - Being **written from scratch** rather than wrapping existing libraries
+    - Prioritizing **performance and efficiency** as core design goals
+    - Providing **24/6 community support** (Sunday is for church)
+    - Maintaining **first-class TypeScript support** throughout the entire API
+    - Offering **granular cache control** that other frameworks don't provide
+  </Accordion>
+</AccordionGroup>
+
+## Runtime Support
+
+Seyfert works across multiple JavaScript runtimes:
+
+<Tabs>
+  <Tab title="Node.js">
+    **Recommended:** Node.js v18 or higher (LTS recommended)
+    
+    ```bash
+    node --version  # Should be v18.0.0 or higher
+    npm install seyfert
+    ```
+  </Tab>
+  
+  <Tab title="Bun">
+    **Fully Supported:** Bun provides excellent performance
+    
+    ```bash
+    bun --version
+    bun add seyfert
+    ```
+  </Tab>
+  
+  <Tab title="Deno">
+    **Supported:** Import via npm specifier
+    
+    ```bash
+    deno add npm:seyfert
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Node.js v16 requires the `--experimental-fetch` flag, but v18+ is strongly recommended.
+</Warning>
+
+## Key Features at a Glance
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Type Safety** | Full TypeScript support with advanced inference | ✅ |
+| **Sharding** | Built-in automatic sharding and worker support | ✅ |
+| **Cache Control** | Granular control over cached resources | ✅ |
+| **Decorators** | Clean command and option decorators | ✅ |
+| **Middleware** | Reusable middleware system | ✅ |
+| **Error Handling** | Typed errors with metadata | ✅ |
+| **Hot Reload** | Development-time command reloading | ✅ |
+| **Multi-runtime** | Node.js, Bun, and Deno support | ✅ |
+| **Voice** | Voice connection support | 🚧 |
+| **Localization** | i18n support for multi-language bots | ✅ |
+
+## Philosophy
+
+Seyfert is built on these core principles:
+
+1. **Developer Experience First**: Writing bot code should be enjoyable and intuitive
+2. **Performance Matters**: Efficient bots can scale further and cost less
+3. **Type Safety**: Catch errors at compile time, not runtime
+4. **Modern JavaScript**: Leverage the latest language features and patterns
+5. **Flexibility**: Provide sane defaults but allow customization when needed
+
+## Community and Support
+
+Join thousands of developers building amazing Discord bots with Seyfert:
+
+<CardGroup cols={2}>
+  <Card title="Discord Server" icon="discord" href="https://discord.com/invite/XNw2RZFzaP">
+    Get help, share your projects, and connect with the community
+  </Card>
+  
+  <Card title="GitHub" icon="github" href="https://github.com/tiramisulabs/seyfert">
+    Star the repo, report issues, and contribute
+  </Card>
+  
+  <Card title="npm Package" icon="box" href="https://www.npmjs.com/package/seyfert">
+    View package stats and version history
+  </Card>
+  
+  <Card title="Website" icon="globe" href="https://seyfert.dev">
+    Official Seyfert website
+  </Card>
+</CardGroup>
+
+<Note>
+  The Seyfert community provides **24/6 support** - we're here to help every day except Sunday!
+</Note>
+
+## Next Steps
+
+Ready to start building? Here's what to do next:
+
+<Steps>
+  <Step title="Install Seyfert">
+    Follow the [installation guide](/installation) to set up your development environment.
+  </Step>
+  
+  <Step title="Create Your First Bot">
+    Follow our [quickstart guide](/quickstart) to create your first Seyfert bot in minutes.
+  </Step>
+  
+  <Step title="Learn Core Concepts">
+    Dive deeper into [commands](/concepts/commands), [events](/concepts/events), and [caching](/concepts/cache).
+  </Step>
+  
+  <Step title="Join the Community">
+    Connect with other developers in our [Discord server](https://discord.com/invite/XNw2RZFzaP).
+  </Step>
+</Steps>

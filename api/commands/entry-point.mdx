@@ -1,0 +1,472 @@
+---
+title: 'EntryPointCommand'
+description: 'Entry point commands for Discord applications'
+---
+
+## Overview
+
+`EntryPointCommand` is the base class for creating primary entry point commands in Discord. These are commands that serve as the main entry point for activities and other app interactions.
+
+## Class Signature
+
+```typescript
+export abstract class EntryPointCommand {
+  middlewares: (keyof RegisteredMiddlewares)[] = [];
+  name!: string;
+  type = ApplicationCommandType.PrimaryEntryPoint;
+  nsfw?: boolean;
+  integrationTypes: ApplicationIntegrationType[] = [];
+  contexts: InteractionContextType[] = [];
+  description!: string;
+  botPermissions?: bigint;
+  dm?: boolean;
+  handler!: EntryPointCommandHandlerType;
+  name_localizations?: Partial<Record<LocaleString, string>>;
+  description_localizations?: Partial<Record<LocaleString, string>>;
+  props: ExtraProps = {};
+  
+  abstract run?(context: EntryPointContext): any;
+}
+```
+
+## Properties
+
+<ParamField path="name" type="string" required>
+  The name of the entry point command.
+</ParamField>
+
+<ParamField path="type" type="ApplicationCommandType.PrimaryEntryPoint" default="ApplicationCommandType.PrimaryEntryPoint">
+  The type of application command. Always `PrimaryEntryPoint` for entry point commands.
+</ParamField>
+
+<ParamField path="handler" type="EntryPointCommandHandlerType" required>
+  The handler type for the entry point command. Specifies how Discord should handle this entry point.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Description of the entry point command.
+</ParamField>
+
+<ParamField path="middlewares" type="(keyof RegisteredMiddlewares)[]" default="[]">
+  Array of middleware names to run before command execution.
+</ParamField>
+
+<ParamField path="nsfw" type="boolean">
+  Whether this command is age-restricted (NSFW).
+</ParamField>
+
+<ParamField path="botPermissions" type="bigint">
+  The permissions the bot needs to execute this command.
+</ParamField>
+
+<ParamField path="dm" type="boolean">
+  Whether this command can be used in DMs (deprecated, use `contexts` instead).
+</ParamField>
+
+<ParamField path="integrationTypes" type="ApplicationIntegrationType[]" default="[]">
+  Where this command can be installed and used (guild, user app).
+</ParamField>
+
+<ParamField path="contexts" type="InteractionContextType[]" default="[]">
+  The contexts where this command can be used (guild, bot DM, private channel).
+</ParamField>
+
+<ParamField path="name_localizations" type="Partial<Record<LocaleString, string>>">
+  Localized names for the command in different languages.
+</ParamField>
+
+<ParamField path="description_localizations" type="Partial<Record<LocaleString, string>>">
+  Localized descriptions for the command.
+</ParamField>
+
+<ParamField path="props" type="ExtraProps" default="{}">
+  Custom properties that can be attached to the command.
+</ParamField>
+
+## Methods
+
+### run
+
+```typescript
+abstract run?(context: EntryPointContext): any
+```
+
+The main execution method for the entry point command. Must be implemented.
+
+<ParamField path="context" type="EntryPointContext">
+  The entry point context containing interaction data and helper methods.
+</ParamField>
+
+### onBeforeMiddlewares
+
+```typescript
+onBeforeMiddlewares?(context: EntryPointContext): any
+```
+
+Hook that runs before middlewares are executed.
+
+### onAfterRun
+
+```typescript
+onAfterRun?(context: EntryPointContext, error: unknown | undefined): any
+```
+
+Hook that runs after command execution completes.
+
+### onRunError
+
+```typescript
+onRunError(context: EntryPointContext<never>, error: unknown): any
+```
+
+Error handler called when the `run` method throws an error.
+
+**Default implementation:**
+```typescript
+context.client.logger.fatal(`${this.name}.<onRunError>`, context.author.id, error);
+```
+
+### onMiddlewaresError
+
+```typescript
+onMiddlewaresError(context: EntryPointContext<never>, error: string): any
+```
+
+Error handler called when a middleware stops execution with an error.
+
+**Default implementation:**
+```typescript
+context.client.logger.fatal(`${this.name}.<onMiddlewaresError>`, context.author.id, error);
+```
+
+### onBotPermissionsFail
+
+```typescript
+onBotPermissionsFail(context: EntryPointContext<never>, permissions: PermissionStrings): any
+```
+
+Called when the bot lacks required permissions.
+
+**Default implementation:**
+```typescript
+context.client.logger.fatal(`${this.name}.<onBotPermissionsFail>`, context.author.id, permissions);
+```
+
+### onInternalError
+
+```typescript
+onInternalError(client: UsingClient, command: EntryPointCommand, error?: unknown): any
+```
+
+Called when an internal error occurs in the command handling system.
+
+**Default implementation:**
+```typescript
+client.logger.fatal(command.name, error);
+```
+
+### toJSON
+
+```typescript
+toJSON(): object
+```
+
+Serializes the command to Discord's API format for registration.
+
+### reload
+
+```typescript
+async reload(): Promise<void>
+```
+
+Reloads the command from its file path.
+
+## EntryPointContext
+
+The context object passed to entry point command handlers.
+
+### Class Signature
+
+```typescript
+export class EntryPointContext<M extends keyof RegisteredMiddlewares = never> extends BaseContext
+```
+
+### Properties
+
+<ParamField path="client" type="UsingClient" required>
+  The Seyfert client instance.
+</ParamField>
+
+<ParamField path="interaction" type="EntryPointInteraction" required>
+  The entry point interaction object.
+</ParamField>
+
+<ParamField path="shardId" type="number">
+  The ID of the shard that received this interaction.
+</ParamField>
+
+<ParamField path="command" type="EntryPointCommand">
+  The command instance being executed.
+</ParamField>
+
+<ParamField path="metadata" type="CommandMetadata<UnionToTuple<M>>">
+  Data passed from middlewares.
+</ParamField>
+
+<ParamField path="globalMetadata" type="GlobalMetadata">
+  Data passed from global middlewares.
+</ParamField>
+
+### Getters
+
+<ParamField path="t" type="function">
+  Localization function for the user's locale.
+</ParamField>
+
+<ParamField path="fullCommandName" type="string">
+  The command name.
+</ParamField>
+
+<ParamField path="deferred" type="boolean">
+  Whether the interaction has been deferred.
+</ParamField>
+
+<ParamField path="guildId" type="string | undefined">
+  The ID of the guild where the command was invoked.
+</ParamField>
+
+<ParamField path="channelId" type="string">
+  The ID of the channel where the command was invoked.
+</ParamField>
+
+<ParamField path="author" type="UserStructure">
+  The user who invoked the command.
+</ParamField>
+
+<ParamField path="member" type="InteractionGuildMemberStructure | undefined">
+  The guild member who invoked the command.
+</ParamField>
+
+### Response Methods
+
+#### write
+
+```typescript
+async write<WR extends boolean = false>(
+  body: InteractionCreateBodyRequest,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure, void>>
+```
+
+Sends an initial response to the interaction.
+
+<ParamField path="body" type="InteractionCreateBodyRequest" required>
+  The message payload to send.
+</ParamField>
+
+<ParamField path="withResponse" type="boolean" default="false">
+  If `true`, returns the created message object.
+</ParamField>
+
+#### modal
+
+```typescript
+modal(body: ModalCreateBodyRequest, options?: undefined): Promise<undefined>
+modal(body: ModalCreateBodyRequest, options: ModalCreateOptions): Promise<ModalSubmitInteraction | null>
+```
+
+Shows a modal dialog to the user.
+
+<ParamField path="body" type="ModalCreateBodyRequest" required>
+  The modal configuration.
+</ParamField>
+
+<ParamField path="options" type="ModalCreateOptions">
+  Options for waiting for modal submission (e.g., timeout).
+</ParamField>
+
+#### deferReply
+
+```typescript
+async deferReply<WR extends boolean = false>(
+  ephemeral?: boolean,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure, undefined>>
+```
+
+Defers the interaction response, showing a loading state.
+
+<ParamField path="ephemeral" type="boolean" default="false">
+  If `true`, the response will be ephemeral.
+</ParamField>
+
+#### editResponse
+
+```typescript
+async editResponse(
+  body: InteractionMessageUpdateBodyRequest,
+): Promise<WebhookMessageStructure>
+```
+
+Edits the initial response or deferred reply.
+
+#### deleteResponse
+
+```typescript
+deleteResponse(): Promise<void>
+```
+
+Deletes the initial response.
+
+#### editOrReply
+
+```typescript
+async editOrReply<WR extends boolean = false>(
+  body: InteractionCreateBodyRequest | InteractionMessageUpdateBodyRequest,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure, void>>
+```
+
+Edits the response if one exists, otherwise creates a new response.
+
+#### followup
+
+```typescript
+async followup(
+  body: MessageWebhookCreateBodyRequest,
+): Promise<WebhookMessageStructure>
+```
+
+Sends a followup message after the initial response.
+
+#### fetchResponse
+
+```typescript
+async fetchResponse(): Promise<WebhookMessageStructure>
+```
+
+Fetches the initial response from Discord's API.
+
+### Fetch Methods
+
+#### channel
+
+```typescript
+channel(mode?: 'rest' | 'flow'): Promise<AllChannels>
+channel(mode: 'cache'): ReturnCache<AllChannels>
+```
+
+Fetches the channel where the command was invoked.
+
+<ParamField path="mode" type="'cache' | 'rest' | 'flow'" default="'flow'">
+  - `'cache'`: Return from cache only
+  - `'rest'`: Force fetch from Discord API
+  - `'flow'`: Check cache first, then API if not found
+</ParamField>
+
+#### guild
+
+```typescript
+guild(mode?: 'rest' | 'flow', query?: RESTGetAPIGuildQuery): Promise<GuildStructure | undefined>
+guild(mode: 'cache', query?: RESTGetAPIGuildQuery): ReturnCache<GuildStructure | undefined>
+```
+
+Fetches the guild where the command was invoked. Returns `undefined` in DMs.
+
+#### me
+
+```typescript
+me(mode?: 'rest' | 'flow'): Promise<GuildMemberStructure | undefined>
+me(mode: 'cache'): ReturnCache<GuildMemberStructure | undefined>
+```
+
+Fetches the bot's guild member object. Returns `undefined` in DMs.
+
+### Type Guards
+
+#### isEntryPoint
+
+```typescript
+isEntryPoint(): this is EntryPointContext<M>
+```
+
+Always returns `true` for EntryPointContext. Used for type narrowing.
+
+#### inGuild
+
+```typescript
+inGuild(): this is GuildEntryPointContext<M>
+```
+
+Returns `true` if the command was invoked in a guild. Narrows type to `GuildEntryPointContext` which guarantees `guildId` and `member` are defined.
+
+## GuildEntryPointContext
+
+When `inGuild()` returns true, the context is narrowed to `GuildEntryPointContext`:
+
+```typescript
+export interface GuildEntryPointContext<M extends keyof RegisteredMiddlewares = never>
+  extends Omit<MakeRequired<EntryPointContext<M>, 'guildId' | 'member'>, 'guild' | 'me'> {
+  guild(mode?: 'rest' | 'flow'): Promise<GuildStructure<'cached' | 'api'>>;
+  guild(mode: 'cache'): ReturnCache<GuildStructure<'cached'> | undefined>;
+  
+  me(mode?: 'rest' | 'flow'): Promise<GuildMemberStructure>;
+  me(mode: 'cache'): ReturnCache<GuildMemberStructure | undefined>;
+}
+```
+
+## Example
+
+```typescript
+import { EntryPointCommand, Declare, type EntryPointContext } from 'seyfert';
+import { 
+  ApplicationIntegrationType, 
+  InteractionContextType,
+  EntryPointCommandHandlerType,
+} from 'seyfert/lib/types';
+
+@Declare({
+  name: 'My Activity',
+  description: 'Launch my Discord activity',
+  handler: EntryPointCommandHandlerType.AppHandler,
+  integrationTypes: [ApplicationIntegrationType.GuildInstall],
+  contexts: [InteractionContextType.Guild],
+})
+export default class MyActivityCommand extends EntryPointCommand {
+  async run(ctx: EntryPointContext) {
+    // Initialize activity
+    await ctx.write({
+      content: 'Starting activity...',
+    });
+    
+    // Get guild information if needed
+    if (ctx.inGuild()) {
+      const guild = await ctx.guild();
+      console.log(`Activity started in ${guild.name}`);
+    }
+    
+    // Additional setup...
+  }
+  
+  onRunError(ctx: EntryPointContext, error: unknown) {
+    console.error('Failed to start activity:', error);
+    ctx.editOrReply({
+      content: 'Failed to start the activity. Please try again later.',
+    });
+  }
+}
+```
+
+## Use Cases
+
+Entry point commands are primarily used for:
+
+- **Discord Activities**: Launch embedded activities (games, experiences)
+- **App Entry Points**: Define how users can launch your app's main functionality
+- **Interactive Experiences**: Create immersive, multi-user experiences in Discord
+
+## See Also
+
+- [Command](/api/commands/command) - Chat input commands
+- [MenuCommand](/api/commands/menu-command) - Context menu commands
+- [CommandContext](/api/commands/command-context) - Context for slash commands

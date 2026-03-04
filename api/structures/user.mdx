@@ -1,0 +1,444 @@
+---
+title: User
+description: API reference for the User class in Seyfert
+---
+
+The `User` class represents a Discord user account with properties and methods for interacting with user-related functionality.
+
+## Constructor
+
+```typescript
+new User(client: UsingClient, data: APIUser)
+```
+
+## Properties
+
+The User class contains all properties from Discord's `APIUser` in camelCase format:
+
+- `id: string` - The user's unique identifier
+- `username: string` - The user's username
+- `discriminator: string` - The user's discriminator (4-digit tag, "0" for new usernames)
+- `globalName: string | null` - The user's display name (null if not set)
+- `avatar: string | null` - The user's avatar hash
+- `bot?: boolean` - Whether the user is a bot
+- `system?: boolean` - Whether the user is an Official Discord System user
+- `mfaEnabled?: boolean` - Whether the user has two-factor authentication enabled
+- `banner?: string | null` - The user's banner hash
+- `accentColor?: number | null` - The user's banner color as an integer
+- `locale?: string` - The user's chosen language option
+- `verified?: boolean` - Whether the email has been verified
+- `email?: string | null` - The user's email
+- `flags?: number` - User flags
+- `premiumType?: number` - Type of Nitro subscription
+- `publicFlags?: number` - Public flags on the user's account
+- `avatarDecorationData?: AvatarDecorationData | null` - Avatar decoration data
+
+## Computed Properties
+
+### tag
+
+```typescript
+get tag(): string
+```
+
+Returns the user's tag. For new Discord usernames (discriminator "0"), returns global name or username. For legacy usernames, returns `username#discriminator`.
+
+**Returns:** User's display tag
+
+**Example:**
+```typescript
+console.log(user.tag);
+// New username: "johndoe" or display name
+// Legacy username: "johndoe#1234"
+```
+
+### name
+
+```typescript
+get name(): string
+```
+
+Returns the user's display name (global name) if set, otherwise returns username.
+
+**Returns:** User's display name
+
+**Example:**
+```typescript
+console.log(user.name);
+// "John Doe" (if global name is set)
+// "johndoe" (if global name is not set)
+```
+
+## Methods
+
+### fetch
+
+```typescript
+fetch(force?: boolean): Promise<User>
+```
+
+Fetches the user from the API.
+
+**Parameters:**
+- `force` - Whether to skip cache and fetch from API (default: false)
+
+**Returns:** Promise resolving to the user
+
+**Example:**
+```typescript
+const user = await client.users.fetch('123456789');
+const freshUser = await user.fetch(true);
+```
+
+### dm
+
+```typescript
+dm(force?: boolean): Promise<DMChannel>
+```
+
+Opens a DM channel with the user.
+
+**Parameters:**
+- `force` - Whether to skip cache and create from API (default: false)
+
+**Returns:** Promise resolving to the DM channel
+
+**Example:**
+```typescript
+const dmChannel = await user.dm();
+console.log(`Opened DM with ${user.username}`);
+```
+
+### write
+
+```typescript
+write(body: MessageCreateBodyRequest): Promise<Message>
+```
+
+Sends a DM to the user.
+
+**Parameters:**
+- `body` - Message creation data
+
+**Returns:** Promise resolving to the sent message
+
+**Example:**
+```typescript
+await user.write({
+  content: 'Hello! This is a DM.'
+});
+```
+
+**With embeds:**
+```typescript
+await user.write({
+  content: 'Welcome!',
+  embeds: [{
+    title: 'Welcome to our server!',
+    description: 'Thanks for joining.',
+    color: 0x00ff00
+  }]
+});
+```
+
+### defaultAvatarURL
+
+```typescript
+defaultAvatarURL(): string
+```
+
+Gets the URL for the user's default avatar (used when user has no custom avatar).
+
+**Returns:** URL to default avatar image
+
+**Example:**
+```typescript
+const defaultAvatar = user.defaultAvatarURL();
+console.log(defaultAvatar);
+// https://cdn.discordapp.com/embed/avatars/2.png
+```
+
+### avatarURL
+
+```typescript
+avatarURL(options?: ImageOptions): string
+```
+
+Gets the URL for the user's avatar. Returns default avatar if user has no custom avatar.
+
+**Parameters:**
+- `options` - Image options
+  - `size?: number` - Image size (any power of 2 between 16 and 4096)
+  - `format?: 'jpg' | 'jpeg' | 'png' | 'webp' | 'gif'` - Image format
+
+**Returns:** URL to avatar image
+
+**Example:**
+```typescript
+const avatar = user.avatarURL();
+const largeAvatar = user.avatarURL({ size: 2048 });
+const gifAvatar = user.avatarURL({ format: 'gif' });
+```
+
+### avatarDecorationURL
+
+```typescript
+avatarDecorationURL(options?: ImageOptions): string | undefined
+```
+
+Gets the URL for the user's avatar decoration.
+
+**Parameters:**
+- `options` - Image options (size, format)
+
+**Returns:** URL to avatar decoration image, or undefined if no decoration
+
+**Example:**
+```typescript
+const decoration = user.avatarDecorationURL();
+if (decoration) {
+  console.log('User has avatar decoration:', decoration);
+}
+```
+
+### bannerURL
+
+```typescript
+bannerURL(options?: ImageOptions): string | undefined
+```
+
+Gets the URL for the user's banner.
+
+**Parameters:**
+- `options` - Image options (size, format)
+
+**Returns:** URL to banner image, or undefined if no banner
+
+**Example:**
+```typescript
+const banner = user.bannerURL({ size: 1024 });
+if (banner) {
+  console.log('User banner:', banner);
+}
+```
+
+### presence
+
+```typescript
+presence(): PresenceStructure | undefined
+```
+
+Gets the user's current presence (status, activity, etc.) from cache.
+
+**Returns:** User's presence, or undefined if not cached
+
+**Example:**
+```typescript
+const presence = user.presence();
+if (presence) {
+  console.log(`Status: ${presence.status}`);
+  console.log(`Activities:`, presence.activities);
+}
+```
+
+### toString
+
+```typescript
+toString(): string
+```
+
+Returns the user mention string.
+
+**Returns:** User mention in Discord format (`<@userId>`)
+
+**Example:**
+```typescript
+await channel.messages.write({
+  content: `Hello ${user.toString()}!`
+});
+// Sends: "Hello <@123456789>!" (which renders as a mention)
+```
+
+## Examples
+
+### Sending a DM to a User
+
+```typescript
+import { Command, type CommandContext } from 'seyfert';
+
+export default class DmCommand extends Command {
+  async run(ctx: CommandContext) {
+    const user = ctx.author;
+    
+    try {
+      await user.write({
+        content: 'Hello!',
+        embeds: [{
+          title: 'Private Message',
+          description: 'This is a DM from the bot.',
+          color: 0x3498db
+        }]
+      });
+      
+      await ctx.write({
+        content: 'Check your DMs!'
+      });
+    } catch (error) {
+      await ctx.write({
+        content: 'Unable to send DM. Do you have DMs disabled?'
+      });
+    }
+  }
+}
+```
+
+### Getting User Information
+
+```typescript
+import { Command, type CommandContext } from 'seyfert';
+
+export default class UserInfoCommand extends Command {
+  async run(ctx: CommandContext) {
+    const userId = ctx.options.getString('user', true);
+    const user = await ctx.client.users.fetch(userId);
+
+    const embed = {
+      title: `User Info: ${user.tag}`,
+      thumbnail: { url: user.avatarURL({ size: 256 }) },
+      fields: [
+        {
+          name: 'Username',
+          value: user.username,
+          inline: true
+        },
+        {
+          name: 'Display Name',
+          value: user.globalName || 'Not set',
+          inline: true
+        },
+        {
+          name: 'ID',
+          value: user.id,
+          inline: true
+        },
+        {
+          name: 'Bot',
+          value: user.bot ? 'Yes' : 'No',
+          inline: true
+        },
+        {
+          name: 'Account Created',
+          value: new Date(
+            Number(BigInt(user.id) >> 22n) + 1420070400000
+          ).toDateString(),
+          inline: true
+        }
+      ],
+      color: user.accentColor || 0x5865f2
+    };
+
+    // Add banner if exists
+    const banner = user.bannerURL({ size: 1024 });
+    if (banner) {
+      embed['image'] = { url: banner };
+    }
+
+    await ctx.write({ embeds: [embed] });
+  }
+}
+```
+
+### Checking User Presence
+
+```typescript
+import { Command, type CommandContext } from 'seyfert';
+
+export default class PresenceCommand extends Command {
+  async run(ctx: CommandContext) {
+    const userId = ctx.options.getString('user', true);
+    const user = await ctx.client.users.fetch(userId);
+    const presence = user.presence();
+
+    if (!presence) {
+      await ctx.write({
+        content: 'Presence data not available (user may be offline or not cached).'
+      });
+      return;
+    }
+
+    const statusEmoji = {
+      online: '🟢',
+      idle: '🟡',
+      dnd: '🔴',
+      offline: '⚫'
+    };
+
+    let description = `${statusEmoji[presence.status]} **${presence.status.toUpperCase()}**`;
+
+    if (presence.activities.length > 0) {
+      description += '\n\n**Activities:**';
+      for (const activity of presence.activities) {
+        description += `\n• ${activity.name}`;
+        if (activity.details) description += `: ${activity.details}`;
+      }
+    }
+
+    await ctx.write({
+      embeds: [{
+        title: `Presence: ${user.tag}`,
+        description,
+        color: 0x5865f2
+      }]
+    });
+  }
+}
+```
+
+### Avatar Command
+
+```typescript
+import { Command, type CommandContext } from 'seyfert';
+
+export default class AvatarCommand extends Command {
+  async run(ctx: CommandContext) {
+    const userId = ctx.options.getString('user') || ctx.author.id;
+    const user = await ctx.client.users.fetch(userId);
+
+    const avatarUrl = user.avatarURL({ size: 4096, format: 'png' });
+    const decoration = user.avatarDecorationURL();
+
+    const embed = {
+      title: `${user.tag}'s Avatar`,
+      image: { url: avatarUrl },
+      color: user.accentColor || 0x5865f2,
+      description: decoration 
+        ? `[Avatar Decoration](${decoration})` 
+        : undefined
+    };
+
+    await ctx.write({ embeds: [embed] });
+  }
+}
+```
+
+## Related Types
+
+```typescript
+interface ImageOptions {
+  size?: 16 | 32 | 64 | 128 | 256 | 512 | 1024 | 2048 | 4096;
+  format?: 'jpg' | 'jpeg' | 'png' | 'webp' | 'gif';
+}
+
+interface MessageCreateBodyRequest {
+  content?: string;
+  tts?: boolean;
+  embeds?: APIEmbed[];
+  allowed_mentions?: AllowedMentions;
+  message_reference?: MessageReference;
+  components?: TopLevelComponents[];
+  sticker_ids?: string[];
+  files?: RawFile[];
+  attachments?: Attachment[];
+  flags?: MessageFlags;
+}
+```

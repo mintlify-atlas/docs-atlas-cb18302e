@@ -1,0 +1,590 @@
+---
+title: Custom Context
+description: Extend command contexts with custom properties and utilities
+---
+
+Seyfert allows you to add custom properties to command contexts, making it easy to inject dependencies, utilities, or application-specific data into every command.
+
+## Overview
+
+The `extendContext` function creates a context extension that is applied to all command contexts (slash commands, user commands, message commands, components, and modals).
+
+## Basic Usage
+
+### Creating a Context Extension
+
+```typescript
+import { extendContext } from 'seyfert';
+
+export const customContext = extendContext((interaction) => {
+  return {
+    // Add custom properties here
+    botOwner: '123456789012345678',
+    
+    // Add utility functions
+    isOwner() {
+      return interaction.user.id === this.botOwner;
+    },
+    
+    // Access to the raw interaction
+    getRawData() {
+      return interaction;
+    }
+  };
+});
+```
+
+Source: [src/index.ts:105-109](file:///home/daytona/workspace/source/src/index.ts:105)
+
+### Configuring the Client
+
+```typescript
+import { Client } from 'seyfert';
+import { customContext } from './context';
+
+const client = new Client({
+  context: customContext
+});
+
+await client.start();
+```
+
+### Using in Commands
+
+```typescript
+import { Command, Declare, Options } from 'seyfert';
+import { customContext } from '../context';
+
+@Declare({
+  name: 'admin',
+  description: 'Admin-only command'
+})
+@Options([])
+export default class AdminCommand extends Command {
+  // Extend the context type
+  async run(ctx: typeof customContext) {
+    // Access custom properties
+    if (!ctx.isOwner()) {
+      return ctx.write({
+        content: 'This command is only for the bot owner!'
+      });
+    }
+    
+    await ctx.write({
+      content: `Hello, owner! Your ID is ${ctx.botOwner}`
+    });
+  }
+}
+```
+
+## Advanced Examples
+
+### Database Access
+
+```typescript
+import { extendContext } from 'seyfert';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+export const dbContext = extendContext((interaction) => {
+  return {
+    db: prisma,
+    
+    // Helper to get or create user
+    async getUser() {
+      return await prisma.user.upsert({
+        where: { id: interaction.user.id },
+        create: {
+          id: interaction.user.id,
+          username: interaction.user.username
+        },
+        update: {}
+      });
+    },
+    
+    // Get guild settings
+    async getGuildSettings() {
+      if (!interaction.guild_id) return null;
+      
+      return await prisma.guildSettings.findUnique({
+        where: { guildId: interaction.guild_id }
+      });
+    }
+  };
+});
+```
+
+Usage:
+
+```typescript
+export default class ProfileCommand extends Command {
+  async run(ctx: typeof dbContext) {
+    const user = await ctx.getUser();
+    
+    await ctx.write({
+      content: `Profile for ${user.username}`
+    });
+  }
+}
+```
+
+### Permission Helpers
+
+```typescript
+import { extendContext } from 'seyfert';
+
+export const permContext = extendContext((interaction) => {
+  return {
+    // List of bot administrators
+    admins: ['123456789012345678', '987654321098765432'],
+    
+    // Check if user is admin
+    isAdmin() {
+      return this.admins.includes(interaction.user.id);
+    },
+    
+    // Check if user is guild owner
+    isGuildOwner() {
+      // Access client to fetch guild data
+      if (!interaction.guild_id) return false;
+      // Note: You'll need to fetch this from cache or API
+      return false; // Implement based on your needs
+    },
+    
+    // Require admin permission
+    requireAdmin() {
+      if (!this.isAdmin()) {
+        throw new Error('Admin permission required');
+      }
+    }
+  };
+});
+```
+
+Usage:
+
+```typescript
+export default class BanCommand extends Command {
+  async run(ctx: typeof permContext) {
+    try {
+      ctx.requireAdmin();
+    } catch (error) {
+      return ctx.write({
+        content: 'You must be an admin to use this command!',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    // Admin-only logic here
+  }
+}
+```
+
+### Logging and Analytics
+
+```typescript
+import { extendContext } from 'seyfert';
+import { Logger } from './logger';
+
+const logger = new Logger();
+
+export const analyticsContext = extendContext((interaction) => {
+  return {
+    logger,
+    
+    // Log command usage
+    logCommand(commandName: string) {
+      logger.info('Command used', {
+        command: commandName,
+        user: interaction.user.id,
+        guild: interaction.guild_id,
+        timestamp: Date.now()
+      });
+    },
+    
+    // Track errors
+    logError(error: Error) {
+      logger.error('Command error', {
+        error: error.message,
+        stack: error.stack,
+        user: interaction.user.id,
+        guild: interaction.guild_id
+      });
+    }
+  };
+});
+```
+
+Usage:
+
+```typescript
+export default class MyCommand extends Command {
+  async run(ctx: typeof analyticsContext) {
+    ctx.logCommand('mycommand');
+    
+    try {
+      // Command logic
+    } catch (error) {
+      ctx.logError(error as Error);
+      throw error;
+    }
+  }
+}
+```
+
+### Localization Helpers
+
+```typescript
+import { extendContext } from 'seyfert';
+import type { LocaleString } from 'seyfert/types';
+
+const translations: Record<string, Record<string, string>> = {
+  'en-US': {
+    'greeting': 'Hello!',
+    'farewell': 'Goodbye!'
+  },
+  'es-ES': {
+    'greeting': '¡Hola!',
+    'farewell': '¡Adiós!'
+  }
+};
+
+export const i18nContext = extendContext((interaction) => {
+  const locale = interaction.locale || 'en-US';
+  
+  return {
+    locale,
+    
+    // Translate a key
+    t(key: string, fallback?: string): string {
+      return translations[locale]?.[key] 
+        ?? translations['en-US']?.[key] 
+        ?? fallback 
+        ?? key;
+    },
+    
+    // Get user's locale
+    getUserLocale(): LocaleString {
+      return locale as LocaleString;
+    }
+  };
+});
+```
+
+Usage:
+
+```typescript
+export default class GreetCommand extends Command {
+  async run(ctx: typeof i18nContext) {
+    await ctx.write({
+      content: ctx.t('greeting', 'Hello!')
+    });
+  }
+}
+```
+
+### API Client Integration
+
+```typescript
+import { extendContext } from 'seyfert';
+import axios from 'axios';
+
+const apiClient = axios.create({
+  baseURL: 'https://api.example.com',
+  headers: {
+    'Authorization': `Bearer ${process.env.API_KEY}`
+  }
+});
+
+export const apiContext = extendContext((interaction) => {
+  return {
+    api: apiClient,
+    
+    // Fetch user data from external API
+    async fetchUserData() {
+      const response = await apiClient.get(`/users/${interaction.user.id}`);
+      return response.data;
+    },
+    
+    // Post analytics
+    async trackEvent(event: string, data: any) {
+      await apiClient.post('/analytics', {
+        event,
+        userId: interaction.user.id,
+        guildId: interaction.guild_id,
+        data,
+        timestamp: Date.now()
+      });
+    }
+  };
+});
+```
+
+### Cooldown Management
+
+```typescript
+import { extendContext } from 'seyfert';
+
+const cooldowns = new Map<string, number>();
+
+export const cooldownContext = extendContext((interaction) => {
+  return {
+    // Check if user is on cooldown
+    onCooldown(commandName: string, duration: number): boolean {
+      const key = `${interaction.user.id}:${commandName}`;
+      const lastUsed = cooldowns.get(key);
+      
+      if (!lastUsed) return false;
+      
+      const remaining = (lastUsed + duration) - Date.now();
+      return remaining > 0;
+    },
+    
+    // Get remaining cooldown time
+    getCooldownRemaining(commandName: string, duration: number): number {
+      const key = `${interaction.user.id}:${commandName}`;
+      const lastUsed = cooldowns.get(key);
+      
+      if (!lastUsed) return 0;
+      
+      const remaining = (lastUsed + duration) - Date.now();
+      return Math.max(0, remaining);
+    },
+    
+    // Set cooldown
+    setCooldown(commandName: string) {
+      const key = `${interaction.user.id}:${commandName}`;
+      cooldowns.set(key, Date.now());
+    }
+  };
+});
+```
+
+Usage:
+
+```typescript
+import { MessageFlags } from 'seyfert/types';
+
+export default class DailyCommand extends Command {
+  async run(ctx: typeof cooldownContext) {
+    const COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours
+    
+    if (ctx.onCooldown('daily', COOLDOWN)) {
+      const remaining = ctx.getCooldownRemaining('daily', COOLDOWN);
+      const hours = Math.floor(remaining / (60 * 60 * 1000));
+      
+      return ctx.write({
+        content: `You can claim your daily reward in ${hours} hours!`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    // Give reward
+    ctx.setCooldown('daily');
+    
+    await ctx.write({
+      content: 'Daily reward claimed!'
+    });
+  }
+}
+```
+
+## Type Safety
+
+TypeScript automatically infers the context type:
+
+```typescript
+// Define context
+export const customContext = extendContext((interaction) => {
+  return {
+    customProp: 'value',
+    customMethod() {
+      return 'result';
+    }
+  };
+});
+
+// Use in command - full type safety
+export default class MyCommand extends Command {
+  async run(ctx: typeof customContext) {
+    // ✅ TypeScript knows about customProp and customMethod
+    const value = ctx.customProp;
+    const result = ctx.customMethod();
+    
+    // ✅ Also has all standard context properties
+    await ctx.write({ content: 'Hello!' });
+    const user = ctx.user;
+    const client = ctx.client;
+  }
+}
+```
+
+## Combining Multiple Extensions
+
+You can combine multiple context extensions:
+
+```typescript
+import { extendContext } from 'seyfert';
+
+const baseContext = extendContext((interaction) => ({
+  botOwner: '123456789012345678'
+}));
+
+const dbContext = extendContext((interaction) => ({
+  db: prisma
+}));
+
+// Combine them
+export const fullContext = extendContext((interaction) => ({
+  ...baseContext(interaction),
+  ...dbContext(interaction),
+  // Add more custom properties
+  appVersion: '1.0.0'
+}));
+```
+
+## Accessing the Client
+
+The interaction object passed to `extendContext` doesn't directly expose the client, but you can access it in commands:
+
+```typescript
+export const clientContext = extendContext((interaction) => {
+  return {
+    // Store interaction for later use
+    interaction,
+    
+    // Helper that requires client (call in command)
+    async getGuildCount(client: any) {
+      return await client.guilds.cache.count('guild');
+    }
+  };
+});
+
+// In command
+export default class StatsCommand extends Command {
+  async run(ctx: typeof clientContext) {
+    // Access client from ctx
+    const count = await ctx.getGuildCount(ctx.client);
+    
+    await ctx.write({
+      content: `Bot is in ${count} guilds`
+    });
+  }
+}
+```
+
+## Component and Modal Contexts
+
+Context extensions apply to all interaction types:
+
+```typescript
+import { ComponentCommand } from 'seyfert';
+import { customContext } from '../context';
+
+export default class MyButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  
+  async run(ctx: typeof customContext) {
+    // Same extended context available
+    if (ctx.isOwner()) {
+      // ...
+    }
+  }
+}
+```
+
+```typescript
+import { ModalCommand } from 'seyfert';
+import { customContext } from '../context';
+
+export default class MyModal extends ModalCommand {
+  async run(ctx: typeof customContext) {
+    // Same extended context available
+    await ctx.write({
+      content: `Thanks for submitting, ${ctx.botOwner}!`
+    });
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep context extensions lightweight">
+    Avoid heavy computations in `extendContext` as it runs for every interaction. Initialize expensive resources outside the function:
+    
+    ```typescript
+    // Good: Initialize once
+    const prisma = new PrismaClient();
+    export const context = extendContext(() => ({ db: prisma }));
+    
+    // Bad: Creates new instance per interaction
+    export const context = extendContext(() => ({ 
+      db: new PrismaClient() 
+    }));
+    ```
+  </Accordion>
+  
+  <Accordion title="Use dependency injection">
+    Context extensions are perfect for injecting dependencies:
+    
+    ```typescript
+    export const context = extendContext(() => ({
+      db: database,
+      cache: redis,
+      logger: logger,
+      config: config
+    }));
+    ```
+  </Accordion>
+  
+  <Accordion title="Type your returns">
+    For better IDE support, explicitly type complex returns:
+    
+    ```typescript
+    interface MyContext {
+      db: PrismaClient;
+      getUser(): Promise<User>;
+    }
+    
+    export const context = extendContext((interaction): MyContext => ({
+      db: prisma,
+      async getUser() {
+        return await prisma.user.findUnique({
+          where: { id: interaction.user.id }
+        });
+      }
+    }));
+    ```
+  </Accordion>
+  
+  <Accordion title="Don't overuse the interaction parameter">
+    The interaction parameter is useful for accessing user/guild data, but avoid complex logic:
+    
+    ```typescript
+    // Good: Simple access
+    extendContext((interaction) => ({
+      userId: interaction.user.id,
+      guildId: interaction.guild_id
+    }));
+    
+    // Avoid: Complex logic
+    extendContext((interaction) => ({
+      // This runs on EVERY interaction - could be slow
+      userData: fetchUserFromDatabase(interaction.user.id)
+    }));
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="HTTP-Only Mode" icon="globe" href="/advanced/http-only">
+    Deploy your bot in serverless environments
+  </Card>
+  <Card title="Middlewares" icon="filter" href="/commands/middleware">
+    Add validation and preprocessing to commands
+  </Card>
+</CardGroup>

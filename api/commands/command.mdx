@@ -1,0 +1,271 @@
+---
+title: 'Command'
+description: 'Base class for chat input commands in Seyfert'
+---
+
+## Overview
+
+The `Command` class is the base class for creating slash commands (chat input commands) in Seyfert. It extends `BaseCommand` and provides the structure for handling application commands of type `ApplicationCommandType.ChatInput`.
+
+## Class Signature
+
+```typescript
+export class Command extends BaseCommand {
+  type = ApplicationCommandType.ChatInput;
+  groups?: Parameters<typeof Groups>[0];
+  groupsAliases?: Record<string, string>;
+}
+```
+
+## Properties
+
+<ParamField path="name" type="string" required>
+  The name of the command. This is what users will type to invoke the command.
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  A brief description of what the command does. This appears in Discord's command picker.
+</ParamField>
+
+<ParamField path="type" type="ApplicationCommandType.ChatInput" default="ApplicationCommandType.ChatInput">
+  The type of application command. For `Command`, this is always `ChatInput`.
+</ParamField>
+
+<ParamField path="options" type="CommandOptionWithType[] | SubCommand[]">
+  An array of options or subcommands for this command. Options define the parameters users can provide when invoking the command.
+</ParamField>
+
+<ParamField path="middlewares" type="(keyof RegisteredMiddlewares)[]" default="[]">
+  Array of middleware names to run before the command executes. Middlewares run in the order specified.
+</ParamField>
+
+<ParamField path="guildId" type="string[]">
+  Optional array of guild IDs where this command should be registered. If not specified, the command is registered globally.
+</ParamField>
+
+<ParamField path="nsfw" type="boolean">
+  Whether this command is age-restricted (NSFW). NSFW commands can only be used in NSFW channels.
+</ParamField>
+
+<ParamField path="defaultMemberPermissions" type="bigint">
+  The default permissions a user needs to use this command. Uses Discord permission bitfield.
+</ParamField>
+
+<ParamField path="botPermissions" type="bigint">
+  The permissions the bot needs to execute this command successfully.
+</ParamField>
+
+<ParamField path="integrationTypes" type="ApplicationIntegrationType[]" default="[]">
+  Where this command can be installed and used (guild, user app).
+</ParamField>
+
+<ParamField path="contexts" type="InteractionContextType[]" default="[]">
+  The contexts where this command can be used (guild, bot DM, private channel).
+</ParamField>
+
+<ParamField path="name_localizations" type="Partial<Record<LocaleString, string>>">
+  Localized names for the command in different languages.
+</ParamField>
+
+<ParamField path="description_localizations" type="Partial<Record<LocaleString, string>>">
+  Localized descriptions for the command in different languages.
+</ParamField>
+
+<ParamField path="groups" type="Parameters<typeof Groups>[0]">
+  Subcommand groups definition. Used when organizing subcommands into groups.
+</ParamField>
+
+<ParamField path="groupsAliases" type="Record<string, string>">
+  Aliases for subcommand groups.
+</ParamField>
+
+<ParamField path="aliases" type="string[]">
+  Alternative names for the command (primarily for message command support).
+</ParamField>
+
+<ParamField path="props" type="ExtraProps" default="{}">
+  Custom properties that can be attached to the command.
+</ParamField>
+
+## Methods
+
+### run
+
+```typescript
+run?(context: CommandContext): any
+```
+
+The main execution method for the command. This is called when a user invokes the command.
+
+<ParamField path="context" type="CommandContext">
+  The command context containing interaction data, options, and helper methods.
+</ParamField>
+
+<ResponseField name="return" type="any">
+  Can return any value. Often returns a Promise if performing async operations.
+</ResponseField>
+
+### onBeforeMiddlewares
+
+```typescript
+onBeforeMiddlewares?(context: CommandContext): any
+```
+
+Hook that runs before middlewares are executed. Useful for setup or early validation.
+
+### onBeforeOptions
+
+```typescript
+onBeforeOptions?(context: CommandContext): any
+```
+
+Hook that runs before option parsing and validation.
+
+### onAfterRun
+
+```typescript
+onAfterRun?(context: CommandContext, error: unknown | undefined): any
+```
+
+Hook that runs after the command execution completes, regardless of success or failure.
+
+<ParamField path="error" type="unknown | undefined">
+  If an error occurred during execution, it will be passed here. Otherwise `undefined`.
+</ParamField>
+
+### onRunError
+
+```typescript
+onRunError?(context: CommandContext, error: unknown): any
+```
+
+Error handler called when the `run` method throws an error.
+
+### onOptionsError
+
+```typescript
+onOptionsError?(context: CommandContext, metadata: OnOptionsReturnObject): any
+```
+
+Error handler called when option parsing/validation fails.
+
+<ParamField path="metadata" type="OnOptionsReturnObject">
+  Object containing details about which options failed and why.
+</ParamField>
+
+### onMiddlewaresError
+
+```typescript
+onMiddlewaresError?(context: CommandContext, error: string): any
+```
+
+Error handler called when a middleware stops execution with an error.
+
+### onBotPermissionsFail
+
+```typescript
+onBotPermissionsFail?(context: CommandContext, permissions: PermissionStrings): any
+```
+
+Called when the bot lacks the required permissions defined in `botPermissions`.
+
+<ParamField path="permissions" type="PermissionStrings">
+  The permissions that were missing.
+</ParamField>
+
+### onPermissionsFail
+
+```typescript
+onPermissionsFail?(context: CommandContext, permissions: PermissionStrings): any
+```
+
+Called when the user lacks the required permissions defined in `defaultMemberPermissions`.
+
+### onInternalError
+
+```typescript
+onInternalError?(client: UsingClient, command: Command | SubCommand, error?: unknown): any
+```
+
+Called when an internal error occurs in the command handling system.
+
+### toJSON
+
+```typescript
+toJSON(): object
+```
+
+Serializes the command to Discord's API format for registration.
+
+### reload
+
+```typescript
+async reload(): Promise<void>
+```
+
+Reloads the command from its file path. Useful for hot-reloading during development.
+
+## Example
+
+```typescript
+import { Command, Declare, Options, type CommandContext } from 'seyfert';
+import { ApplicationIntegrationType, InteractionContextType } from 'seyfert/lib/types';
+
+const options = {
+  user: {
+    type: ApplicationCommandOptionType.User,
+    description: 'The user to greet',
+    required: true,
+  },
+};
+
+@Declare({
+  name: 'hello',
+  description: 'Greet a user',
+  integrationTypes: [ApplicationIntegrationType.GuildInstall],
+  contexts: [InteractionContextType.Guild, InteractionContextType.BotDM],
+})
+@Options(options)
+export default class HelloCommand extends Command {
+  async run(ctx: CommandContext<typeof options>) {
+    const user = ctx.options.user;
+    
+    await ctx.write({
+      content: `Hello, ${user.username}!`,
+    });
+  }
+  
+  onRunError(ctx: CommandContext, error: unknown) {
+    ctx.client.logger.error('Error in hello command:', error);
+    ctx.editOrReply({
+      content: 'An error occurred while executing the command.',
+    });
+  }
+}
+```
+
+## SubCommand Class
+
+For creating subcommands, use the `SubCommand` class:
+
+```typescript
+export abstract class SubCommand extends BaseCommand {
+  type = ApplicationCommandOptionType.Subcommand;
+  group?: string;
+  declare options?: CommandOptionWithType[];
+  
+  abstract run(context: CommandContext): any;
+}
+```
+
+<ParamField path="group" type="string">
+  The name of the subcommand group this subcommand belongs to (optional).
+</ParamField>
+
+Subcommands must implement the `run` method and can access the same lifecycle hooks as the parent `Command` class.
+
+## See Also
+
+- [CommandContext](/api/commands/command-context) - Context object passed to command handlers
+- [MenuCommand](/api/commands/menu-command) - Context menu commands
+- [EntryPointCommand](/api/commands/entry-point) - Entry point commands

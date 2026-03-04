@@ -1,0 +1,393 @@
+---
+title: 'Permissions'
+description: 'Permission utilities and bitfield operations for Discord permissions'
+---
+
+## PermissionsBitField
+
+A bitfield class for handling Discord permissions with methods for checking, adding, and resolving permission flags.
+
+### Type Definition
+
+```typescript
+class PermissionsBitField extends BitField<typeof PermissionFlagsBits>
+```
+
+### Constructor
+
+```typescript
+new PermissionsBitField(
+  bitfields?: BitFieldResolvable<typeof PermissionFlagsBits> | 
+              BitFieldResolvable<typeof PermissionFlagsBits>[]
+)
+```
+
+**Parameters:**
+- `bitfields` - Initial permission flags to set (optional)
+
+### Properties
+
+#### Flags
+
+Reference to the `PermissionFlagsBits` object.
+
+```typescript
+Flags: typeof PermissionFlagsBits
+```
+
+#### All
+
+All available permissions combined.
+
+```typescript
+static All: bigint
+```
+
+### Methods
+
+#### has
+
+Checks if the bitfield has the specified permissions. Automatically returns `true` if the bitfield has Administrator permission.
+
+```typescript
+has(bits: BitFieldResolvable<typeof PermissionFlagsBits>[]): boolean
+```
+
+**Parameters:**
+- `bits` - Array of permission flags to check
+
+**Returns:** `true` if all permissions are present or has Administrator
+
+**Example:**
+```typescript
+import { PermissionsBitField, PermissionFlagsBits } from 'seyfert';
+
+const permissions = new PermissionsBitField([
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.ViewChannel
+]);
+
+if (permissions.has([PermissionFlagsBits.SendMessages])) {
+  console.log('Can send messages');
+}
+```
+
+#### strictHas
+
+Checks if the bitfield has the specified permissions without the Administrator bypass.
+
+```typescript
+strictHas(bits: BitFieldResolvable<typeof PermissionFlagsBits>[]): boolean
+```
+
+**Parameters:**
+- `bits` - Array of permission flags to check
+
+**Returns:** `true` if all permissions are present
+
+**Example:**
+```typescript
+const permissions = new PermissionsBitField([PermissionFlagsBits.Administrator]);
+
+// has() returns true for any permission when Administrator is present
+permissions.has([PermissionFlagsBits.SendMessages]); // true
+
+// strictHas() only returns true if the permission is explicitly present
+permissions.strictHas([PermissionFlagsBits.SendMessages]); // false
+```
+
+#### keys
+
+Returns an array of permission flag names.
+
+```typescript
+keys(bits?: BitFieldResolvable<typeof PermissionFlagsBits>[]): PermissionStrings
+```
+
+**Returns:** Array of permission names
+
+**Type:**
+```typescript
+type PermissionStrings = (keyof typeof PermissionFlagsBits)[]
+```
+
+#### resolve (instance method)
+
+Resolves permission flags to a bigint.
+
+```typescript
+resolve<T extends typeof PermissionFlagsBits>(
+  bits: BitFieldResolvable<T> | BitFieldResolvable<T>[]
+): bigint
+```
+
+#### resolve (static method)
+
+Static method to resolve permission flags to a bigint.
+
+```typescript
+static resolve<T extends typeof PermissionFlagsBits>(
+  bits: BitFieldResolvable<T> | BitFieldResolvable<T>[]
+): bigint
+```
+
+**Parameters:**
+- `bits` - Permission flags to resolve (can be strings, numbers, bigints, or arrays)
+
+**Returns:** The resolved permission value as a bigint
+
+**Example:**
+```typescript
+import { PermissionsBitField, PermissionFlagsBits } from 'seyfert';
+
+// Resolve from permission names
+const value1 = PermissionsBitField.resolve(['SendMessages', 'ViewChannel']);
+
+// Resolve from bigints
+const value2 = PermissionsBitField.resolve([
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.ViewChannel
+]);
+
+// Both produce the same result
+console.log(value1 === value2); // true
+```
+
+## PermissionFlagsBits
+
+An object containing all Discord permission flags as bigint values.
+
+### Type Definition
+
+```typescript
+const PermissionFlagsBits: {
+  CreateInstantInvite: bigint;
+  KickMembers: bigint;
+  BanMembers: bigint;
+  Administrator: bigint;
+  ManageChannels: bigint;
+  ManageGuild: bigint;
+  // ... and many more
+}
+```
+
+### Available Permissions
+
+#### General Permissions
+
+- `CreateInstantInvite` - Allows creation of instant invites
+- `KickMembers` - Allows kicking members
+- `BanMembers` - Allows banning members
+- `Administrator` - All permissions and bypasses channel permission overwrites
+- `ManageChannels` - Allows management and editing of channels
+- `ManageGuild` - Allows management and editing of the guild
+- `ViewAuditLog` - Allows viewing of audit logs
+- `ViewChannel` - Allows viewing channels
+- `ManageRoles` - Allows management of roles
+- `ManageWebhooks` - Allows management of webhooks
+- `ManageGuildExpressions` - Allows management of emojis, stickers, and soundboard sounds
+- `ManageEvents` - Allows management of guild events
+
+#### Text Channel Permissions
+
+- `AddReactions` - Allows adding reactions to messages
+- `SendMessages` - Allows sending messages
+- `SendTTSMessages` - Allows sending TTS messages
+- `ManageMessages` - Allows deleting messages from other users
+- `EmbedLinks` - Links sent will be auto-embedded
+- `AttachFiles` - Allows uploading images and files
+- `ReadMessageHistory` - Allows reading message history
+- `MentionEveryone` - Allows mentioning @everyone and @here
+- `UseExternalEmojis` - Allows using external emojis
+- `UseExternalStickers` - Allows using external stickers
+- `SendMessagesInThreads` - Allows sending messages in threads
+- `CreatePublicThreads` - Allows creating public threads
+- `CreatePrivateThreads` - Allows creating private threads
+- `ManageThreads` - Allows managing threads
+
+#### Voice Channel Permissions
+
+- `Connect` - Allows connecting to voice channels
+- `Speak` - Allows speaking in voice channels
+- `MuteMembers` - Allows muting members in voice channels
+- `DeafenMembers` - Allows deafening members in voice channels
+- `MoveMembers` - Allows moving members between voice channels
+- `UseVAD` - Allows using voice activity detection
+- `PrioritySpeaker` - Allows using priority speaker
+- `Stream` - Allows streaming video
+- `UseEmbeddedActivities` - Allows using Activities in voice channels
+- `UseSoundboard` - Allows using the soundboard
+- `UseExternalSounds` - Allows using external sounds
+- `SetVoiceChannelStatus` - Allows setting voice channel status
+
+#### Advanced Permissions
+
+- `ChangeNickname` - Allows changing own nickname
+- `ManageNicknames` - Allows managing nicknames of other members
+- `RequestToSpeak` - Allows requesting to speak in stage channels
+- `CreateGuildExpressions` - Allows creating emojis, stickers, and soundboard sounds
+- `CreateEvents` - Allows creating guild events
+- `ModerateMembers` - Allows timing out members
+- `ViewCreatorMonetizationAnalytics` - Allows viewing monetization analytics
+- `UseClydeAI` - Allows using Clyde AI
+
+## PermissionStrings
+
+A type representing an array of permission flag names.
+
+```typescript
+type PermissionStrings = (keyof typeof PermissionFlagsBits)[]
+```
+
+**Example:**
+```typescript
+const permissions: PermissionStrings = [
+  'SendMessages',
+  'ViewChannel',
+  'EmbedLinks'
+];
+```
+
+## Usage Examples
+
+### Checking Permissions
+
+```typescript
+import { PermissionsBitField, PermissionFlagsBits } from 'seyfert';
+
+const memberPermissions = new PermissionsBitField([
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.EmbedLinks
+]);
+
+// Check single permission
+if (memberPermissions.has([PermissionFlagsBits.SendMessages])) {
+  console.log('Member can send messages');
+}
+
+// Check multiple permissions
+if (memberPermissions.has([
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.EmbedLinks
+])) {
+  console.log('Member can send messages with embeds');
+}
+```
+
+### Creating Permission Sets
+
+```typescript
+import { PermissionsBitField, PermissionFlagsBits } from 'seyfert';
+
+// Basic text channel permissions
+const textChannelPerms = new PermissionsBitField([
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.ReadMessageHistory
+]);
+
+// Moderator permissions
+const moderatorPerms = new PermissionsBitField([
+  PermissionFlagsBits.KickMembers,
+  PermissionFlagsBits.BanMembers,
+  PermissionFlagsBits.ManageMessages,
+  PermissionFlagsBits.ModerateMembers
+]);
+
+// Administrator (all permissions)
+const adminPerms = new PermissionsBitField([
+  PermissionFlagsBits.Administrator
+]);
+```
+
+### Resolving Permissions
+
+```typescript
+import { PermissionsBitField, PermissionFlagsBits } from 'seyfert';
+
+// Resolve from strings
+const perms1 = PermissionsBitField.resolve(['SendMessages', 'ViewChannel']);
+
+// Resolve from bitfield values
+const perms2 = PermissionsBitField.resolve([
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.ViewChannel
+]);
+
+// Resolve from numbers
+const perms3 = PermissionsBitField.resolve(2048n); // SendMessages
+
+console.log(perms1); // bigint value
+```
+
+### Working with Command Permissions
+
+```typescript
+import { Command, PermissionFlagsBits } from 'seyfert';
+import type { CommandContext } from 'seyfert';
+
+@Command({
+  name: 'ban',
+  description: 'Ban a user from the server',
+  defaultMemberPermissions: [PermissionFlagsBits.BanMembers]
+})
+export class BanCommand extends BaseCommand {
+  async run(ctx: CommandContext) {
+    // Check if the bot has the necessary permissions
+    const botPermissions = ctx.guild?.me?.permissions;
+    
+    if (!botPermissions?.has([PermissionFlagsBits.BanMembers])) {
+      return ctx.editOrReply({
+        content: 'I do not have permission to ban members!'
+      });
+    }
+
+    // Execute ban logic...
+  }
+}
+```
+
+### Permission Comparison
+
+```typescript
+import { PermissionsBitField, PermissionFlagsBits } from 'seyfert';
+
+const userPerms = new PermissionsBitField([
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.ViewChannel
+]);
+
+const requiredPerms = new PermissionsBitField([
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.EmbedLinks
+]);
+
+// Get permission names
+const userPermNames = userPerms.keys();
+console.log(userPermNames); // ['SendMessages', 'ViewChannel']
+
+// Check if user has all required permissions
+const hasRequired = userPerms.has(requiredPerms.keys());
+console.log(hasRequired); // false (missing EmbedLinks)
+```
+
+### OAuth2 URL Generation with Permissions
+
+```typescript
+import { Formatter, PermissionFlagsBits } from 'seyfert';
+
+const inviteUrl = Formatter.generateOAuth2URL('YOUR_BOT_ID', {
+  scopes: ['bot', 'applications.commands'],
+  permissions: [
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.ViewChannel,
+    PermissionFlagsBits.EmbedLinks,
+    PermissionFlagsBits.AttachFiles,
+    PermissionFlagsBits.ReadMessageHistory,
+    PermissionFlagsBits.UseExternalEmojis
+  ]
+});
+
+console.log('Invite your bot:', inviteUrl);
+```

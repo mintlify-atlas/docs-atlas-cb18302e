@@ -1,0 +1,349 @@
+---
+title: 'ModalCommand'
+description: 'Base class for handling Discord modal submit interactions'
+icon: 'window'
+---
+
+## Overview
+
+`ModalCommand` is an abstract class that handles Discord modal submit interactions. It provides filtering, middleware support, and lifecycle hooks for processing modal form submissions.
+
+## Class Definition
+
+```typescript
+abstract class ModalCommand {
+  type: 1; // InteractionCommandType.MODAL
+  customId?: string | RegExp;
+  filter?(context: ModalContext): Promise<boolean> | boolean;
+  abstract run(context: ModalContext): any;
+  middlewares: (keyof RegisteredMiddlewares)[];
+  props: ExtraProps;
+}
+```
+
+## Properties
+
+### customId
+
+<ParamField path="customId" type="string | RegExp">
+  The custom ID to match against. Can be an exact string or a regular expression for pattern matching.
+</ParamField>
+
+### middlewares
+
+<ParamField path="middlewares" type="(keyof RegisteredMiddlewares)[]" default="[]">
+  Array of middleware names to execute before running the command.
+</ParamField>
+
+### props
+
+<ParamField path="props" type="ExtraProps">
+  Additional properties passed from middleware execution.
+</ParamField>
+
+### type
+
+<ParamField path="type" type="1">
+  Constant identifier marking this as a modal command (`InteractionCommandType.MODAL`).
+</ParamField>
+
+## Methods
+
+### run()
+
+<ParamField path="run" type="(context: ModalContext) => any" required>
+  The main execution method called when the modal is submitted. This is where you process form data.
+
+  **Parameters:**
+  - `context` - The modal context containing form data and response methods
+
+  **Returns:** Any value (typically a Promise)
+</ParamField>
+
+### filter()
+
+<ParamField path="filter" type="(context: ModalContext) => Promise<boolean> | boolean">
+  Optional filter method for additional validation beyond `customId` matching.
+
+  **Parameters:**
+  - `context` - The modal context to validate
+
+  **Returns:** `true` to allow execution, `false` to reject
+</ParamField>
+
+## Lifecycle Hooks
+
+### onBeforeMiddlewares()
+
+<ParamField path="onBeforeMiddlewares" type="(context: ModalContext) => any">
+  Called before middleware execution begins.
+</ParamField>
+
+### onAfterRun()
+
+<ParamField path="onAfterRun" type="(context: ModalContext, error: unknown | undefined) => any">
+  Called after the `run()` method completes, regardless of success or failure.
+  
+  **Parameters:**
+  - `context` - The modal context
+  - `error` - The error if one occurred, otherwise `undefined`
+</ParamField>
+
+### onRunError()
+
+<ParamField path="onRunError" type="(context: ModalContext, error: unknown) => any">
+  Called when an error occurs during `run()` execution.
+  
+  **Parameters:**
+  - `context` - The modal context
+  - `error` - The error that occurred
+</ParamField>
+
+### onMiddlewaresError()
+
+<ParamField path="onMiddlewaresError" type="(context: ModalContext, error: string) => any">
+  Called when middleware execution fails.
+  
+  **Parameters:**
+  - `context` - The modal context
+  - `error` - Error message from middleware
+</ParamField>
+
+### onInternalError()
+
+<ParamField path="onInternalError" type="(client: UsingClient, error?: unknown) => any">
+  Called when an internal framework error occurs.
+  
+  **Parameters:**
+  - `client` - The bot client instance
+  - `error` - The internal error
+</ParamField>
+
+## Examples
+
+### Basic Modal Handler
+
+```typescript
+import { ModalCommand, ModalContext } from 'seyfert';
+import { MessageFlags } from 'seyfert/lib/types';
+
+export default class FeedbackModal extends ModalCommand {
+  customId = 'feedback_form';
+
+  async run(ctx: ModalContext) {
+    // Access modal components
+    const components = ctx.components;
+    
+    // Get field values
+    const feedback = components[0].components[0].value;
+    const rating = components[1].components[0].value;
+
+    await ctx.write({
+      content: `Thank you for your feedback!\nRating: ${rating}/5`,
+      flags: MessageFlags.Ephemeral
+    });
+
+    // Process feedback (save to database, etc.)
+  }
+}
+```
+
+### Modal with RegExp Matching
+
+```typescript
+import { ModalCommand, ModalContext } from 'seyfert';
+
+export default class EditModal extends ModalCommand {
+  customId = /^edit_modal_(\d+)$/; // Matches: edit_modal_123, etc.
+
+  async run(ctx: ModalContext) {
+    const match = ctx.customId.match(this.customId as RegExp);
+    const itemId = match?.[1];
+
+    const newContent = ctx.components[0].components[0].value;
+
+    await ctx.write({
+      content: `Item ${itemId} updated successfully!`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Accessing Form Fields
+
+```typescript
+import { ModalCommand, ModalContext } from 'seyfert';
+
+export default class ReportModal extends ModalCommand {
+  customId = 'report_user';
+
+  async run(ctx: ModalContext) {
+    // Components structure: [[row1], [row2], ...]
+    const components = ctx.components;
+    
+    // Get values from text inputs
+    const reason = components[0].components[0].value;
+    const details = components[1].components[0].value;
+    const evidence = components[2]?.components[0]?.value || 'None provided';
+
+    // Defer reply for longer processing
+    await ctx.deferReply(true);
+
+    // Process report
+    const reportId = await saveReport({
+      userId: ctx.author.id,
+      reason,
+      details,
+      evidence
+    });
+
+    await ctx.editResponse({
+      content: `Report submitted successfully! ID: ${reportId}`
+    });
+  }
+}
+```
+
+### Using Filter Method
+
+```typescript
+import { ModalCommand, ModalContext } from 'seyfert';
+
+export default class AdminModal extends ModalCommand {
+  customId = 'admin_settings';
+
+  async filter(ctx: ModalContext) {
+    // Only allow in guilds
+    if (!ctx.guildId) return false;
+    
+    // Check admin permissions
+    const member = ctx.member;
+    return member?.permissions.has('Administrator') ?? false;
+  }
+
+  async run(ctx: ModalContext) {
+    const settings = ctx.components[0].components[0].value;
+    
+    await ctx.write({
+      content: 'Admin settings updated!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### With Middleware
+
+```typescript
+import { ModalCommand, ModalContext } from 'seyfert';
+
+export default class PremiumModal extends ModalCommand {
+  customId = 'premium_settings';
+  middlewares = ['checkPremium' as const];
+
+  onMiddlewaresError(ctx: ModalContext, error: string) {
+    return ctx.write({
+      content: 'Premium subscription required!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  async run(ctx: ModalContext) {
+    const config = ctx.components[0].components[0].value;
+    
+    await ctx.write({
+      content: 'Premium settings saved!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Error Handling
+
+```typescript
+import { ModalCommand, ModalContext } from 'seyfert';
+
+export default class SafeModal extends ModalCommand {
+  customId = 'data_submission';
+
+  async run(ctx: ModalContext) {
+    const data = ctx.components[0].components[0].value;
+    
+    // Validate input
+    if (data.length < 10) {
+      throw new Error('Input too short');
+    }
+
+    // Process data
+    await processData(data);
+
+    await ctx.write({
+      content: 'Data processed successfully!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  async onRunError(ctx: ModalContext, error: unknown) {
+    console.error('Modal submission error:', error);
+    
+    const message = error instanceof Error ? error.message : 'An error occurred';
+    
+    await ctx.write({
+      content: `Error: ${message}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  async onAfterRun(ctx: ModalContext, error: unknown | undefined) {
+    // Log all submissions
+    console.log(`Modal ${ctx.customId} by ${ctx.author.username}: ${error ? 'Failed' : 'Success'}`);
+  }
+}
+```
+
+### Multi-Field Form
+
+```typescript
+import { ModalCommand, ModalContext } from 'seyfert';
+
+export default class ApplicationModal extends ModalCommand {
+  customId = 'job_application';
+
+  async run(ctx: ModalContext) {
+    // Extract all fields
+    const name = ctx.components[0].components[0].value;
+    const email = ctx.components[1].components[0].value;
+    const experience = ctx.components[2].components[0].value;
+    const motivation = ctx.components[3].components[0].value;
+    const availability = ctx.components[4].components[0].value;
+
+    // Defer for database operation
+    await ctx.deferReply(true);
+
+    // Save application
+    const applicationId = await database.applications.create({
+      userId: ctx.author.id,
+      name,
+      email,
+      experience,
+      motivation,
+      availability,
+      submittedAt: new Date()
+    });
+
+    await ctx.editResponse({
+      content: `Application submitted! Your application ID is ${applicationId}.\nWe'll review it and get back to you soon.`
+    });
+
+    // Notify admins
+    await notifyAdmins(applicationId);
+  }
+}
+```
+
+## See Also
+
+- [ModalContext](/api/components/component-context) - Context object for modal interactions
+- [ComponentCommand](/api/components/component-command) - Handler for button and select menu interactions

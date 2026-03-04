@@ -1,0 +1,555 @@
+---
+title: 'Text Inputs'
+description: 'Create text input fields for use in modal dialogs'
+icon: 'input-text'
+---
+
+Text input components allow users to enter text in modal dialogs. Seyfert provides a flexible `TextInput` builder with support for single-line and multi-line inputs.
+
+## Creating Text Inputs
+
+Use the `TextInput` builder class to create text input components:
+
+```typescript
+import { TextInput, TextInputStyle } from 'seyfert';
+
+const textInput = new TextInput()
+  .setCustomId('username')
+  .setLabel('Username')
+  .setStyle(TextInputStyle.Short)
+  .setPlaceholder('Enter your username')
+  .setRequired(true);
+```
+
+<Note>
+  Text inputs can only be used inside modals. They must be wrapped in an `ActionRow` component.
+</Note>
+
+## Text Input Styles
+
+Seyfert supports two text input styles:
+
+### Short (Single Line)
+
+Best for brief inputs like names, emails, or URLs:
+
+```typescript
+import { TextInput, TextInputStyle } from 'seyfert';
+
+const emailInput = new TextInput()
+  .setCustomId('email')
+  .setLabel('Email Address')
+  .setStyle(TextInputStyle.Short)
+  .setPlaceholder('user@example.com');
+```
+
+### Paragraph (Multi-line)
+
+Best for longer text like descriptions, feedback, or messages:
+
+```typescript
+import { TextInput, TextInputStyle } from 'seyfert';
+
+const feedbackInput = new TextInput()
+  .setCustomId('feedback')
+  .setLabel('Your Feedback')
+  .setStyle(TextInputStyle.Paragraph)
+  .setPlaceholder('Tell us what you think...');
+```
+
+## Text Input Properties
+
+### Custom ID
+
+Set a unique identifier for the input (max 100 characters):
+
+```typescript
+textInput.setCustomId('user-bio');
+```
+
+You'll use this ID to retrieve the value when the modal is submitted.
+
+### Label
+
+Set the label displayed above the input (max 45 characters):
+
+```typescript
+textInput.setLabel('Biography');
+```
+
+### Style
+
+Set whether the input is single-line or multi-line:
+
+```typescript
+// Single line
+textInput.setStyle(TextInputStyle.Short);
+
+// Multi-line
+textInput.setStyle(TextInputStyle.Paragraph);
+```
+
+### Placeholder
+
+Set placeholder text shown when the input is empty (max 100 characters):
+
+```typescript
+textInput.setPlaceholder('Type something here...');
+```
+
+### Initial Value
+
+Set a pre-filled value for the input:
+
+```typescript
+textInput.setValue('Default text');
+```
+
+This is useful for edit forms where you want to show existing data.
+
+### Required
+
+Mark the input as required:
+
+```typescript
+// Required (user must enter a value)
+textInput.setRequired(true);
+
+// Optional
+textInput.setRequired(false);
+```
+
+### Length Constraints
+
+Set minimum and maximum character limits:
+
+```typescript
+// Minimum length only
+textInput.setLength({ min: 10 });
+
+// Maximum length only
+textInput.setLength({ max: 500 });
+
+// Both minimum and maximum
+textInput.setLength({ min: 10, max: 200 });
+```
+
+<Warning>
+  Text input values are limited to 4000 characters, regardless of your max length setting.
+</Warning>
+
+## Using Text Inputs in Modals
+
+Text inputs must be placed inside action rows within a modal:
+
+```typescript
+import { Modal, ActionRow, TextInput, TextInputStyle } from 'seyfert';
+
+const modal = new Modal()
+  .setCustomId('profile-form')
+  .setTitle('Edit Profile')
+  .addComponents(
+    // First text input
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('display-name')
+        .setLabel('Display Name')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Your display name')
+        .setRequired(true)
+        .setLength({ min: 2, max: 32 })
+    ),
+    // Second text input
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('bio')
+        .setLabel('Biography')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Tell us about yourself')
+        .setRequired(false)
+        .setLength({ max: 500 })
+    )
+  );
+```
+
+## Retrieving Input Values
+
+Access submitted values in your modal handler:
+
+```typescript
+import { ModalCommand } from 'seyfert';
+import type { ModalContext } from 'seyfert';
+
+export default class ProfileFormModal extends ModalCommand {
+  customId = 'profile-form';
+  
+  async run(ctx: ModalContext) {
+    // Get values using the custom IDs
+    const displayName = ctx.fields.getTextInputValue('display-name');
+    const bio = ctx.fields.getTextInputValue('bio');
+    
+    console.log('Display Name:', displayName);
+    console.log('Bio:', bio);
+    
+    await ctx.write({
+      content: `Profile updated!\nDisplay Name: ${displayName}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Accessing Text Input Component Data
+
+Retrieve component properties from the modal context:
+
+```typescript
+import { TextInputComponent } from 'seyfert';
+
+async run(ctx: ModalContext) {
+  // Get all components
+  const components = ctx.components;
+  
+  // Get a specific component
+  const textInputs = components.flatMap(row => 
+    row.components.filter(c => c instanceof TextInputComponent)
+  );
+  
+  for (const input of textInputs) {
+    console.log(input.customId);     // Custom ID
+    console.log(input.value);        // Submitted value
+    console.log(input.style);        // Style (1 = Short, 2 = Paragraph)
+    console.log(input.required);     // Whether required
+    console.log(input.placeholder);  // Placeholder text
+    console.log(input.min);          // Minimum length
+    console.log(input.max);          // Maximum length
+  }
+}
+```
+
+## Complete Examples
+
+### User Registration Form
+
+```typescript
+import { Command } from 'seyfert';
+import { Modal, ActionRow, TextInput, TextInputStyle } from 'seyfert';
+
+export default class RegisterCommand extends Command {
+  async run(ctx: CommandContext) {
+    const modal = new Modal()
+      .setCustomId('user-registration')
+      .setTitle('User Registration')
+      .addComponents(
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('username')
+            .setLabel('Username')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Choose a unique username')
+            .setRequired(true)
+            .setLength({ min: 3, max: 20 })
+        ),
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('email')
+            .setLabel('Email Address')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('user@example.com')
+            .setRequired(true)
+            .setLength({ min: 5, max: 100 })
+        ),
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('age')
+            .setLabel('Age')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Enter your age')
+            .setRequired(true)
+            .setLength({ min: 1, max: 3 })
+        )
+      );
+    
+    await ctx.modal(modal);
+  }
+}
+
+// Handler
+import { ModalCommand } from 'seyfert';
+
+export default class RegistrationModal extends ModalCommand {
+  customId = 'user-registration';
+  
+  async run(ctx: ModalContext) {
+    const username = ctx.fields.getTextInputValue('username');
+    const email = ctx.fields.getTextInputValue('email');
+    const age = ctx.fields.getTextInputValue('age');
+    
+    // Validate age is a number
+    const ageNum = parseInt(age, 10);
+    if (isNaN(ageNum) || ageNum < 13) {
+      return ctx.write({
+        content: '❌ Invalid age. You must be at least 13 years old.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return ctx.write({
+        content: '❌ Invalid email format.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    // Save to database
+    await saveUser({
+      discordId: ctx.author.id,
+      username,
+      email,
+      age: ageNum
+    });
+    
+    await ctx.write({
+      content: `✅ Registration successful!\nUsername: ${username}\nEmail: ${email}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Support Ticket System
+
+```typescript
+import { ComponentCommand, ComponentType } from 'seyfert';
+import { Modal, ActionRow, TextInput, TextInputStyle } from 'seyfert';
+
+export default class CreateTicketButton extends ComponentCommand {
+  componentType = ComponentType.Button as const;
+  customId = 'create-ticket';
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const modal = new Modal()
+      .setCustomId('ticket-form')
+      .setTitle('Create Support Ticket')
+      .addComponents(
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('ticket-subject')
+            .setLabel('Subject')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Brief description of your issue')
+            .setRequired(true)
+            .setLength({ min: 10, max: 100 })
+        ),
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('ticket-description')
+            .setLabel('Description')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Provide detailed information about your issue')
+            .setRequired(true)
+            .setLength({ min: 20, max: 2000 })
+        ),
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('ticket-priority')
+            .setLabel('Priority (Low, Medium, High)')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Low')
+            .setRequired(false)
+            .setValue('Low')
+        )
+      );
+    
+    await ctx.modal(modal);
+  }
+}
+
+// Handler
+import { ModalCommand } from 'seyfert';
+import { Embed } from 'seyfert';
+
+export default class TicketFormModal extends ModalCommand {
+  customId = 'ticket-form';
+  
+  async run(ctx: ModalContext) {
+    const subject = ctx.fields.getTextInputValue('ticket-subject');
+    const description = ctx.fields.getTextInputValue('ticket-description');
+    const priority = ctx.fields.getTextInputValue('ticket-priority') || 'Low';
+    
+    // Validate priority
+    const validPriorities = ['low', 'medium', 'high'];
+    const normalizedPriority = priority.toLowerCase();
+    if (!validPriorities.includes(normalizedPriority)) {
+      return ctx.write({
+        content: '❌ Invalid priority. Use: Low, Medium, or High.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    // Create ticket embed
+    const ticketEmbed = new Embed()
+      .setTitle(`Ticket: ${subject}`)
+      .setDescription(description)
+      .addFields(
+        { name: 'Priority', value: priority, inline: true },
+        { name: 'Status', value: 'Open', inline: true },
+        { name: 'Created by', value: `<@${ctx.author.id}>`, inline: true }
+      )
+      .setColor(normalizedPriority === 'high' ? 0xFF0000 : 
+                normalizedPriority === 'medium' ? 0xFFA500 : 0x00FF00)
+      .setTimestamp();
+    
+    // Send to tickets channel
+    const ticketsChannel = await ctx.client.channels.fetch('TICKETS_CHANNEL_ID');
+    if (ticketsChannel?.isTextBased()) {
+      await ticketsChannel.messages.write({
+        embeds: [ticketEmbed]
+      });
+    }
+    
+    await ctx.write({
+      content: '✅ Support ticket created successfully!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Edit Message Form
+
+```typescript
+import { ComponentCommand, ComponentType } from 'seyfert';
+import { Modal, ActionRow, TextInput, TextInputStyle } from 'seyfert';
+
+export default class EditMessageButton extends ComponentCommand {
+  componentType = ComponentType.Button as const;
+  customId = /^edit-msg-(\d+)$/;
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const messageId = ctx.customId.match(/^edit-msg-(\d+)$/)?.[1];
+    if (!messageId) return;
+    
+    // Fetch the message to get current content
+    const message = await ctx.channel?.messages.fetch(messageId);
+    if (!message) {
+      return ctx.write({
+        content: '❌ Message not found.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    const modal = new Modal()
+      .setCustomId(`edit-modal-${messageId}`)
+      .setTitle('Edit Message')
+      .addComponents(
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('message-content')
+            .setLabel('Message Content')
+            .setStyle(TextInputStyle.Paragraph)
+            .setValue(message.content)  // Pre-fill with current content
+            .setRequired(true)
+            .setLength({ min: 1, max: 2000 })
+        )
+      );
+    
+    await ctx.modal(modal);
+  }
+}
+
+// Handler
+export default class EditMessageModal extends ModalCommand {
+  customId = /^edit-modal-(\d+)$/;
+  
+  async run(ctx: ModalContext) {
+    const messageId = ctx.customId.match(/^edit-modal-(\d+)$/)?.[1];
+    if (!messageId) return;
+    
+    const newContent = ctx.fields.getTextInputValue('message-content');
+    
+    // Update the message
+    const message = await ctx.channel?.messages.fetch(messageId);
+    if (message && message.author.id === ctx.client.user?.id) {
+      await message.edit({ content: newContent });
+      
+      await ctx.write({
+        content: '✅ Message updated successfully!',
+        flags: MessageFlags.Ephemeral
+      });
+    } else {
+      await ctx.write({
+        content: '❌ Cannot edit this message.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+  }
+}
+```
+
+## Validation Techniques
+
+Common validation patterns for text inputs:
+
+```typescript
+// Email validation
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+if (!emailRegex.test(email)) {
+  return ctx.write({ content: 'Invalid email format.' });
+}
+
+// URL validation
+const urlRegex = /^https?:\/\/.+/;
+if (!urlRegex.test(url)) {
+  return ctx.write({ content: 'Invalid URL format.' });
+}
+
+// Number validation
+const num = parseInt(value, 10);
+if (isNaN(num)) {
+  return ctx.write({ content: 'Please enter a valid number.' });
+}
+
+// Length validation
+if (value.length < 10 || value.length > 100) {
+  return ctx.write({ content: 'Value must be between 10 and 100 characters.' });
+}
+
+// Alphanumeric validation
+const alphanumericRegex = /^[a-zA-Z0-9]+$/;
+if (!alphanumericRegex.test(value)) {
+  return ctx.write({ content: 'Only letters and numbers are allowed.' });
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Clear Labels" icon="tag">
+    Use descriptive labels that clearly indicate what information is expected from the user.
+  </Card>
+  
+  <Card title="Helpful Placeholders" icon="lightbulb">
+    Provide example input in placeholders to guide users on the expected format.
+  </Card>
+  
+  <Card title="Set Length Limits" icon="ruler">
+    Always set appropriate min/max lengths to ensure data quality and prevent abuse.
+  </Card>
+  
+  <Card title="Validate Input" icon="check">
+    Validate all user input on the server side before processing or storing data.
+  </Card>
+</CardGroup>
+
+## Limitations
+
+- Text inputs can only be used in modals
+- Each action row can contain exactly 1 text input
+- A modal can have up to 5 text inputs (5 action rows)
+- Labels are limited to 45 characters
+- Placeholders are limited to 100 characters
+- Input values are limited to 4000 characters
+- Custom IDs are limited to 100 characters

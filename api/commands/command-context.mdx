@@ -1,0 +1,419 @@
+---
+title: 'CommandContext'
+description: 'Context object for chat input command interactions'
+---
+
+## Overview
+
+`CommandContext` is the context object passed to command handlers when a slash command is invoked. It provides access to the interaction data, parsed options, response methods, and various helper utilities.
+
+## Class Signature
+
+```typescript
+export class CommandContext<
+  T extends OptionsRecord = {},
+  M extends keyof RegisteredMiddlewares = never,
+> extends BaseContext
+```
+
+## Type Parameters
+
+<ParamField path="T" type="OptionsRecord" default="{}">
+  Type definition for the command's options. When properly typed, provides autocomplete and type safety for `ctx.options`.
+</ParamField>
+
+<ParamField path="M" type="keyof RegisteredMiddlewares" default="never">
+  Union type of middleware keys used by the command. Provides typing for `ctx.metadata`.
+</ParamField>
+
+## Properties
+
+<ParamField path="client" type="UsingClient" required>
+  The Seyfert client instance.
+</ParamField>
+
+<ParamField path="interaction" type="ChatInputCommandInteraction | undefined">
+  The interaction object if this command was invoked via slash command. `undefined` if invoked via message (when using prefix commands).
+</ParamField>
+
+<ParamField path="message" type="MessageStructure | undefined">
+  The message object if this command was invoked via message prefix. `undefined` for slash commands.
+</ParamField>
+
+<ParamField path="resolver" type="OptionResolverStructure">
+  Internal resolver for parsing command options.
+</ParamField>
+
+<ParamField path="shardId" type="number">
+  The ID of the shard that received this interaction.
+</ParamField>
+
+<ParamField path="command" type="Command | SubCommand">
+  The command instance being executed.
+</ParamField>
+
+<ParamField path="options" type="ContextOptions<T>">
+  Parsed command options with full type safety based on the options definition.
+</ParamField>
+
+<ParamField path="metadata" type="CommandMetadata<UnionToTuple<M>>">
+  Data passed from middlewares. Each middleware can attach data that's accessible here.
+</ParamField>
+
+<ParamField path="globalMetadata" type="GlobalMetadata">
+  Data passed from global middlewares.
+</ParamField>
+
+<ParamField path="messageResponse" type="MessageStructure | undefined">
+  The response message after using `write()`, `deferReply()`, or `editOrReply()`.
+</ParamField>
+
+## Getters
+
+<ParamField path="t" type="function">
+  Localization function for the user's locale. Returns translations based on the interaction locale.
+</ParamField>
+
+<ParamField path="fullCommandName" type="string">
+  The full command name including subcommand and group (e.g., "config set language").
+</ParamField>
+
+<ParamField path="deferred" type="boolean">
+  Whether the interaction has been deferred.
+</ParamField>
+
+<ParamField path="guildId" type="string | undefined">
+  The ID of the guild where the command was invoked. `undefined` in DMs.
+</ParamField>
+
+<ParamField path="channelId" type="string">
+  The ID of the channel where the command was invoked.
+</ParamField>
+
+<ParamField path="author" type="UserStructure">
+  The user who invoked the command.
+</ParamField>
+
+<ParamField path="member" type="GuildMemberStructure | InteractionGuildMemberStructure | undefined">
+  The guild member who invoked the command. `undefined` in DMs.
+</ParamField>
+
+<ParamField path="proxy" type="ProxyManager">
+  Proxy manager for REST API requests.
+</ParamField>
+
+## Response Methods
+
+### write
+
+```typescript
+async write<WR extends boolean = false>(
+  body: InteractionCreateBodyRequest,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure | MessageStructure, void>>
+```
+
+Sends an initial response to the interaction.
+
+<ParamField path="body" type="InteractionCreateBodyRequest" required>
+  The message payload to send.
+</ParamField>
+
+<ParamField path="withResponse" type="boolean" default="false">
+  If `true`, returns the created message object.
+</ParamField>
+
+**Example:**
+```typescript
+await ctx.write({
+  content: 'Hello, World!',
+  embeds: [embed],
+});
+```
+
+### deferReply
+
+```typescript
+async deferReply<WR extends boolean = false>(
+  ephemeral?: boolean,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure | MessageStructure, void>>
+```
+
+Defers the interaction response, showing a loading state. Must edit the response later.
+
+<ParamField path="ephemeral" type="boolean" default="false">
+  If `true`, the response will be ephemeral (only visible to the command user).
+</ParamField>
+
+<ParamField path="withResponse" type="boolean" default="false">
+  If `true`, returns the deferred message object.
+</ParamField>
+
+**Example:**
+```typescript
+await ctx.deferReply();
+// ... perform long operation
+await ctx.editResponse({ content: 'Done!' });
+```
+
+### editResponse
+
+```typescript
+async editResponse(
+  body: InteractionMessageUpdateBodyRequest,
+): Promise<WebhookMessageStructure | MessageStructure>
+```
+
+Edits the initial response or deferred reply.
+
+<ParamField path="body" type="InteractionMessageUpdateBodyRequest" required>
+  The updated message payload.
+</ParamField>
+
+**Example:**
+```typescript
+await ctx.editResponse({
+  content: 'Updated content',
+  embeds: [],
+});
+```
+
+### deleteResponse
+
+```typescript
+deleteResponse(): Promise<void>
+```
+
+Deletes the initial response.
+
+**Example:**
+```typescript
+await ctx.deleteResponse();
+```
+
+### editOrReply
+
+```typescript
+async editOrReply<WR extends boolean = false>(
+  body: InteractionCreateBodyRequest | InteractionMessageUpdateBodyRequest,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure | MessageStructure, void>>
+```
+
+Edits the response if one exists, otherwise creates a new response.
+
+<ParamField path="body" type="InteractionCreateBodyRequest | InteractionMessageUpdateBodyRequest" required>
+  The message payload.
+</ParamField>
+
+**Example:**
+```typescript
+await ctx.editOrReply({
+  content: 'This will edit or reply based on state',
+});
+```
+
+### followup
+
+```typescript
+async followup(
+  body: MessageWebhookCreateBodyRequest,
+): Promise<WebhookMessageStructure | MessageStructure>
+```
+
+Sends a followup message after the initial response.
+
+<ParamField path="body" type="MessageWebhookCreateBodyRequest" required>
+  The followup message payload.
+</ParamField>
+
+**Example:**
+```typescript
+await ctx.followup({
+  content: 'This is a followup message',
+  ephemeral: true,
+});
+```
+
+### fetchResponse
+
+```typescript
+async fetchResponse(): Promise<WebhookMessageStructure | MessageStructure>
+```
+
+Fetches the initial response from Discord's API.
+
+**Example:**
+```typescript
+const response = await ctx.fetchResponse();
+console.log(response.content);
+```
+
+## Fetch Methods
+
+### channel
+
+```typescript
+channel(mode?: 'rest' | 'flow'): Promise<AllChannels>
+channel(mode: 'cache'): ReturnCache<AllChannels | undefined>
+```
+
+Fetches the channel where the command was invoked.
+
+<ParamField path="mode" type="'cache' | 'rest' | 'flow'" default="'flow'">
+  - `'cache'`: Return from cache only
+  - `'rest'`: Force fetch from Discord API
+  - `'flow'`: Check cache first, then API if not found
+</ParamField>
+
+**Example:**
+```typescript
+const channel = await ctx.channel();
+if (channel.isTextGuild()) {
+  console.log('Text channel:', channel.name);
+}
+```
+
+### guild
+
+```typescript
+guild(mode?: 'rest' | 'flow', query?: RESTGetAPIGuildQuery): Promise<GuildStructure | undefined>
+guild(mode: 'cache', query?: RESTGetAPIGuildQuery): ReturnCache<GuildStructure | undefined>
+```
+
+Fetches the guild where the command was invoked. Returns `undefined` in DMs.
+
+**Example:**
+```typescript
+const guild = await ctx.guild();
+if (guild) {
+  console.log('Guild name:', guild.name);
+}
+```
+
+### me
+
+```typescript
+me(mode?: 'rest' | 'flow'): Promise<GuildMemberStructure | undefined>
+me(mode: 'cache'): ReturnCache<GuildMemberStructure | undefined>
+```
+
+Fetches the bot's guild member object. Returns `undefined` in DMs.
+
+**Example:**
+```typescript
+const botMember = await ctx.me();
+if (botMember) {
+  console.log('Bot nickname:', botMember.nick);
+}
+```
+
+## Type Guards
+
+### isChat
+
+```typescript
+isChat(): this is CommandContext<T, M>
+```
+
+Always returns `true` for CommandContext. Used for type narrowing.
+
+### inGuild
+
+```typescript
+inGuild(): this is GuildCommandContext<T, M>
+```
+
+Returns `true` if the command was invoked in a guild (not DM). Narrows type to `GuildCommandContext` which guarantees `guildId` and `member` are defined.
+
+**Example:**
+```typescript
+if (ctx.inGuild()) {
+  // TypeScript knows guildId and member are not undefined here
+  const guild = await ctx.guild(); // guaranteed to return GuildStructure
+  console.log(ctx.member.roles); // member is guaranteed to exist
+}
+```
+
+## GuildCommandContext
+
+When `inGuild()` returns true, the context is narrowed to `GuildCommandContext`:
+
+```typescript
+export interface GuildCommandContext<
+  T extends OptionsRecord = {},
+  M extends keyof RegisteredMiddlewares = never,
+> extends Omit<MakeRequired<CommandContext<T, M>, 'guildId' | 'member'>, 'guild' | 'me'> {
+  guild(mode?: 'rest' | 'flow'): Promise<GuildStructure<'cached' | 'api'>>;
+  guild(mode: 'cache'): ReturnCache<GuildStructure<'cached'> | undefined>;
+  
+  me(mode?: 'rest' | 'flow'): Promise<GuildMemberStructure>;
+  me(mode: 'cache'): ReturnCache<GuildMemberStructure | undefined>;
+}
+```
+
+This provides stronger type guarantees for guild-only commands.
+
+## Complete Example
+
+```typescript
+import { Command, Declare, Options, type CommandContext } from 'seyfert';
+import { ApplicationCommandOptionType } from 'seyfert/lib/types';
+
+const options = {
+  message: {
+    type: ApplicationCommandOptionType.String,
+    description: 'The message to echo',
+    required: true,
+  },
+  ephemeral: {
+    type: ApplicationCommandOptionType.Boolean,
+    description: 'Send as ephemeral message',
+    required: false,
+  },
+};
+
+@Declare({
+  name: 'echo',
+  description: 'Echoes your message',
+})
+@Options(options)
+export default class EchoCommand extends Command {
+  async run(ctx: CommandContext<typeof options>) {
+    // Access typed options
+    const message = ctx.options.message;
+    const ephemeral = ctx.options.ephemeral ?? false;
+    
+    // Check if in guild
+    if (ctx.inGuild()) {
+      const guild = await ctx.guild();
+      console.log(`Command used in ${guild.name}`);
+    }
+    
+    // Defer if needed
+    if (message.length > 1000) {
+      await ctx.deferReply(ephemeral);
+      // ... process long message
+      await ctx.editResponse({ content: message });
+    } else {
+      await ctx.write({
+        content: message,
+        flags: ephemeral ? MessageFlags.Ephemeral : undefined,
+      });
+    }
+    
+    // Send a followup
+    await ctx.followup({
+      content: 'Message sent!',
+      ephemeral: true,
+    });
+  }
+}
+```
+
+## See Also
+
+- [Command](/api/commands/command) - Command class reference
+- [MenuCommandContext](/api/commands/menu-command) - Context for context menu commands
+- [EntryPointContext](/api/commands/entry-point) - Context for entry point commands

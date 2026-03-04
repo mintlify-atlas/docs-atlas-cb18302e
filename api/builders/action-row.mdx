@@ -1,0 +1,348 @@
+---
+title: ActionRow
+description: API reference for the ActionRow builder class
+---
+
+# ActionRow
+
+The `ActionRow` class is a layout component that organizes other components (buttons, select menus, text inputs) in horizontal rows within Discord messages and modals.
+
+## Constructor
+
+```ts
+new ActionRow<T extends ActionBuilderComponents>(
+  data?: Partial<APIActionRowComponent<APIActionRowComponentTypes>>
+)
+```
+
+Creates a new ActionRow instance with optional initial data.
+
+### Type Parameters
+
+- `T`: The type of components that can be added to this Action Row (e.g., `Button`, `StringSelectMenu`, `TextInput`)
+
+### Parameters
+
+- `data` (optional): Partial action row data, including initial components
+
+### Example
+
+```ts
+import { ActionRow, Button } from 'seyfert/builders';
+
+const row = new ActionRow<Button>();
+const rowWithData = new ActionRow<Button>({ 
+  components: [/* raw button data */] 
+});
+```
+
+## Properties
+
+### components
+
+```ts
+components: FixedComponents<T>[]
+```
+
+Array of components contained in this Action Row.
+
+## Methods
+
+### addComponents
+
+```ts
+addComponents(...component: RestOrArray<FixedComponents<T>>): this
+```
+
+Adds one or more components to the Action Row.
+
+#### Parameters
+
+- `component`: Component(s) to add. Can be a single component, multiple components as arguments, or an array of components.
+
+#### Example
+
+```ts
+import { ActionRow, Button } from 'seyfert/builders';
+import { ButtonStyle } from 'seyfert/types';
+
+const row = new ActionRow<Button>();
+
+// Add single component
+row.addComponents(
+  new Button()
+    .setCustomId('btn1')
+    .setLabel('Button 1')
+    .setStyle(ButtonStyle.Primary)
+);
+
+// Add multiple components
+row.addComponents(
+  new Button().setCustomId('btn2').setLabel('Button 2').setStyle(ButtonStyle.Secondary),
+  new Button().setCustomId('btn3').setLabel('Button 3').setStyle(ButtonStyle.Success)
+);
+
+// Add array of components
+const buttons = [
+  new Button().setCustomId('btn4').setLabel('Button 4').setStyle(ButtonStyle.Danger)
+];
+row.addComponents(buttons);
+```
+
+### setComponents
+
+```ts
+setComponents(...component: RestOrArray<FixedComponents<T>>): this
+```
+
+Sets the components of the Action Row, replacing any existing components.
+
+#### Parameters
+
+- `component`: Component(s) to set
+
+#### Example
+
+```ts
+import { ActionRow, Button } from 'seyfert/builders';
+import { ButtonStyle } from 'seyfert/types';
+
+const row = new ActionRow<Button>();
+
+row.setComponents(
+  new Button().setCustomId('new1').setLabel('New 1').setStyle(ButtonStyle.Primary),
+  new Button().setCustomId('new2').setLabel('New 2').setStyle(ButtonStyle.Secondary)
+);
+```
+
+### toJSON
+
+```ts
+toJSON(): APIActionRowComponent<APIMessageActionRowComponent>
+```
+
+Converts the ActionRow instance to a JSON object compatible with Discord's API.
+
+#### Returns
+
+The JSON representation of the action row and its components.
+
+## Component Types
+
+Action Rows can contain different types of components depending on context:
+
+### In Messages
+
+- **Buttons** - Up to 5 buttons per row
+- **Select Menus** - 1 select menu per row (any type)
+
+### In Modals
+
+- **TextInput** - 1 text input per row
+- **Select Menus** - 1 select menu per row (limited types)
+
+## Examples
+
+### Button Row
+
+```ts
+import { ActionRow, Button } from 'seyfert/builders';
+import { ButtonStyle } from 'seyfert/types';
+
+const row = new ActionRow<Button>()
+  .addComponents(
+    new Button()
+      .setCustomId('accept')
+      .setLabel('Accept')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('✅'),
+    new Button()
+      .setCustomId('decline')
+      .setLabel('Decline')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('❌'),
+    new Button()
+      .setStyle(ButtonStyle.Link)
+      .setURL('https://example.com/terms')
+      .setLabel('View Terms')
+  );
+
+await interaction.write({
+  content: 'Do you accept the terms?',
+  components: [row]
+});
+```
+
+### Select Menu Row
+
+```ts
+import { ActionRow, StringSelectMenu, StringSelectOption } from 'seyfert/builders';
+
+const selectMenu = new StringSelectMenu()
+  .setCustomId('color_select')
+  .setPlaceholder('Choose a color')
+  .addOption(
+    new StringSelectOption().setLabel('Red').setValue('red').setEmoji('🔴'),
+    new StringSelectOption().setLabel('Green').setValue('green').setEmoji('🟢'),
+    new StringSelectOption().setLabel('Blue').setValue('blue').setEmoji('🔵')
+  );
+
+const row = new ActionRow<StringSelectMenu>().addComponents(selectMenu);
+
+await interaction.write({
+  content: 'Pick your favorite color:',
+  components: [row]
+});
+```
+
+### Multiple Rows
+
+```ts
+import { ActionRow, Button, StringSelectMenu } from 'seyfert/builders';
+import { ButtonStyle } from 'seyfert/types';
+
+const buttonRow = new ActionRow<Button>()
+  .addComponents(
+    new Button().setCustomId('prev').setLabel('Previous').setStyle(ButtonStyle.Secondary),
+    new Button().setCustomId('next').setLabel('Next').setStyle(ButtonStyle.Primary)
+  );
+
+const menuRow = new ActionRow<StringSelectMenu>()
+  .addComponents(
+    new StringSelectMenu()
+      .setCustomId('page_select')
+      .setPlaceholder('Jump to page...')
+      .addOption(
+        new StringSelectOption().setLabel('Page 1').setValue('1'),
+        new StringSelectOption().setLabel('Page 2').setValue('2'),
+        new StringSelectOption().setLabel('Page 3').setValue('3')
+      )
+  );
+
+await interaction.write({
+  content: 'Navigation',
+  components: [buttonRow, menuRow]
+});
+```
+
+### Modal with Action Rows
+
+```ts
+import { Modal, ActionRow, TextInput } from 'seyfert/builders';
+import { TextInputStyle } from 'seyfert/types';
+
+const modal = new Modal()
+  .setTitle('User Profile')
+  .setCustomId('profile_modal')
+  .addComponents(
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('username')
+        .setLabel('Username')
+        .setStyle(TextInputStyle.Short)
+        .setRequired()
+    ),
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('bio')
+        .setLabel('Bio')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Tell us about yourself...')
+        .setLength({ max: 500 })
+    )
+  );
+
+await interaction.modal(modal);
+```
+
+### Mixed Component Styles
+
+```ts
+import { ActionRow, Button } from 'seyfert/builders';
+import { ButtonStyle } from 'seyfert/types';
+
+// Row 1: Action buttons
+const actionRow = new ActionRow<Button>()
+  .addComponents(
+    new Button().setCustomId('edit').setLabel('Edit').setStyle(ButtonStyle.Primary),
+    new Button().setCustomId('delete').setLabel('Delete').setStyle(ButtonStyle.Danger)
+  );
+
+// Row 2: Link button
+const linkRow = new ActionRow<Button>()
+  .addComponents(
+    new Button()
+      .setStyle(ButtonStyle.Link)
+      .setURL('https://docs.example.com')
+      .setLabel('View Documentation')
+      .setEmoji('📚')
+  );
+
+await interaction.write({
+  content: 'Manage your content',
+  components: [actionRow, linkRow]
+});
+```
+
+### Dynamic Component Generation
+
+```ts
+import { ActionRow, Button } from 'seyfert/builders';
+import { ButtonStyle } from 'seyfert/types';
+
+const pages = ['Page 1', 'Page 2', 'Page 3', 'Page 4', 'Page 5'];
+
+const buttons = pages.map((page, index) => 
+  new Button()
+    .setCustomId(`page_${index + 1}`)
+    .setLabel(page)
+    .setStyle(ButtonStyle.Secondary)
+);
+
+const row = new ActionRow<Button>().addComponents(buttons);
+
+await interaction.write({
+  content: 'Select a page:',
+  components: [row]
+});
+```
+
+## Limitations
+
+### For Messages
+
+- Maximum 5 Action Rows per message
+- Maximum 5 buttons per Action Row
+- Maximum 1 select menu per Action Row
+- Cannot mix buttons and select menus in the same row
+
+### For Modals
+
+- Maximum 5 Action Rows per modal
+- Maximum 1 TextInput per Action Row
+- Maximum 1 select menu per Action Row (certain types)
+
+## Type Safety
+
+The ActionRow class uses TypeScript generics to ensure type safety:
+
+```ts
+// Type-safe: Can only add Buttons
+const buttonRow = new ActionRow<Button>();
+buttonRow.addComponents(new Button()); // ✅ OK
+
+// Type-safe: Can only add StringSelectMenu
+const selectRow = new ActionRow<StringSelectMenu>();
+selectRow.addComponents(new StringSelectMenu()); // ✅ OK
+
+// The following would cause TypeScript errors:
+// buttonRow.addComponents(new StringSelectMenu()); // ❌ Error
+// selectRow.addComponents(new Button()); // ❌ Error
+```
+
+## See Also
+
+- [Button](/api/builders/button) - Button components
+- [SelectMenu](/api/builders/select-menu) - Select menu components
+- [Modal](/api/builders/modal) - Modal dialogs with text inputs
+- [Embed](/api/builders/embed) - Message embeds

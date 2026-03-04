@@ -1,0 +1,277 @@
+---
+title: Button
+description: API reference for the Button builder class
+---
+
+# Button
+
+The `Button` class provides a builder pattern for creating interactive button components in Discord messages.
+
+## Constructor
+
+```ts
+new Button(data?: Partial<APIButtonComponent>)
+```
+
+Creates a new Button instance with optional initial data.
+
+### Parameters
+
+- `data` (optional): Partial button data to initialize with
+
+### Example
+
+```ts
+const button = new Button();
+const buttonWithData = new Button({ 
+  style: ButtonStyle.Primary,
+  label: 'Click Me'
+});
+```
+
+## Methods
+
+### setCustomId
+
+```ts
+setCustomId(id: string): this
+```
+
+Sets the custom ID for the button. Required for non-link buttons.
+
+<Note>
+Custom IDs are used to identify the button in interaction events. They must be unique within your message and can be up to 100 characters long.
+</Note>
+
+#### Parameters
+
+- `id`: The custom identifier for this button
+
+#### Example
+
+```ts
+button.setCustomId('accept_button');
+```
+
+### setLabel
+
+```ts
+setLabel(label: string): this
+```
+
+Sets the text label displayed on the button.
+
+#### Parameters
+
+- `label`: Button text (max 80 characters)
+
+#### Example
+
+```ts
+button.setLabel('Accept');
+```
+
+### setStyle
+
+```ts
+setStyle(style: ButtonStyle): this
+```
+
+Sets the visual style of the button.
+
+#### Parameters
+
+- `style`: Button style from the `ButtonStyle` enum
+  - `ButtonStyle.Primary` (1) - Blue button
+  - `ButtonStyle.Secondary` (2) - Gray button
+  - `ButtonStyle.Success` (3) - Green button
+  - `ButtonStyle.Danger` (4) - Red button
+  - `ButtonStyle.Link` (5) - Link button (requires URL)
+  - `ButtonStyle.Premium` (6) - Purple premium button
+
+#### Example
+
+```ts
+import { ButtonStyle } from 'seyfert/types';
+
+button.setStyle(ButtonStyle.Primary);
+button.setStyle(ButtonStyle.Danger);
+```
+
+### setURL
+
+```ts
+setURL(url: string): this
+```
+
+Sets the URL for link-style buttons. Only used when style is `ButtonStyle.Link`.
+
+#### Parameters
+
+- `url`: The URL to open when clicked
+
+#### Example
+
+```ts
+button
+  .setStyle(ButtonStyle.Link)
+  .setURL('https://seyfert.dev')
+  .setLabel('Visit Documentation');
+```
+
+### setEmoji
+
+```ts
+setEmoji(emoji: EmojiResolvable): this
+```
+
+Sets the emoji displayed on the button.
+
+#### Parameters
+
+- `emoji`: Emoji as Unicode string, emoji name, or emoji object
+  - Unicode: `'👍'`
+  - Name: `':thumbsup:'`
+  - Custom emoji object: `{ id: '123456789', name: 'custom' }`
+
+#### Example
+
+```ts
+button.setEmoji('👍');
+button.setEmoji(':thumbsup:');
+button.setEmoji({ id: '123456789', name: 'custom_emoji' });
+```
+
+### setDisabled
+
+```ts
+setDisabled(disabled?: boolean): this
+```
+
+Sets whether the button is disabled (non-interactive).
+
+#### Parameters
+
+- `disabled`: Whether to disable the button (default: `true`)
+
+#### Example
+
+```ts
+button.setDisabled(); // Disabled
+button.setDisabled(true); // Disabled
+button.setDisabled(false); // Enabled
+```
+
+### setSKUId
+
+```ts
+setSKUId(skuId: string): this
+```
+
+Sets the SKU ID for premium buttons.
+
+#### Parameters
+
+- `skuId`: The SKU identifier for the premium item
+
+#### Example
+
+```ts
+button
+  .setStyle(ButtonStyle.Premium)
+  .setSKUId('1234567890');
+```
+
+## Button Styles
+
+Buttons can have different visual styles:
+
+| Style | Color | Use Case |
+|-------|-------|----------|
+| Primary | Blue | Main action |
+| Secondary | Gray | Secondary actions |
+| Success | Green | Confirm/accept actions |
+| Danger | Red | Delete/destructive actions |
+| Link | Gray | External links (requires URL) |
+| Premium | Purple | Premium/paid features |
+
+## Examples
+
+### Basic Interactive Button
+
+```ts
+import { Button } from 'seyfert/builders';
+import { ButtonStyle } from 'seyfert/types';
+
+const button = new Button()
+  .setCustomId('confirm_action')
+  .setLabel('Confirm')
+  .setStyle(ButtonStyle.Success)
+  .setEmoji('✅');
+```
+
+### Link Button
+
+```ts
+const linkButton = new Button()
+  .setStyle(ButtonStyle.Link)
+  .setURL('https://seyfert.dev/docs')
+  .setLabel('Documentation')
+  .setEmoji('📚');
+```
+
+### Disabled Button
+
+```ts
+const disabledButton = new Button()
+  .setCustomId('unavailable')
+  .setLabel('Not Available')
+  .setStyle(ButtonStyle.Secondary)
+  .setDisabled();
+```
+
+### Button Row
+
+```ts
+import { ActionRow } from 'seyfert/builders';
+
+const row = new ActionRow<Button>()
+  .addComponents(
+    new Button()
+      .setCustomId('accept')
+      .setLabel('Accept')
+      .setStyle(ButtonStyle.Success),
+    new Button()
+      .setCustomId('decline')
+      .setLabel('Decline')
+      .setStyle(ButtonStyle.Danger)
+  );
+
+await interaction.write({
+  content: 'Do you accept?',
+  components: [row]
+});
+```
+
+### Premium Button
+
+```ts
+const premiumButton = new Button()
+  .setStyle(ButtonStyle.Premium)
+  .setSKUId('1234567890')
+  .setLabel('Get Premium');
+```
+
+## Limitations
+
+- Maximum 5 buttons per Action Row
+- Maximum 5 Action Rows per message
+- Label is optional if emoji is set, but at least one must be present
+- Link buttons cannot have custom IDs
+- Non-link buttons must have custom IDs
+
+## See Also
+
+- [ActionRow](/api/builders/action-row) - Layout buttons in rows
+- [SelectMenu](/api/builders/select-menu) - Dropdown menus
+- [Modal](/api/builders/modal) - Modal dialogs

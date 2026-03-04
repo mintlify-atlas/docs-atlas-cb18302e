@@ -1,0 +1,337 @@
+---
+title: Client Architecture
+description: Understanding Seyfert's client architecture and lifecycle
+---
+
+## Overview
+
+Seyfert provides multiple client types designed for different deployment scenarios. All clients extend from `BaseClient`, which provides core functionality for command handling, caching, and API interactions.
+
+## Client Types
+
+### BaseClient
+
+The foundation of all Seyfert clients, `BaseClient` provides:
+
+- REST API handling via `ApiHandler`
+- Cache management
+- Command and component handlers
+- Resource shorters (users, guilds, channels, etc.)
+- Localization support
+
+```typescript
+import { BaseClient } from 'seyfert';
+
+const client = new BaseClient({
+  commands: {
+    defaults: {
+      onRunError(context, error) {
+        context.client.logger.fatal(`Error in ${context.command.name}`, error);
+      }
+    }
+  }
+});
+```
+
+### Client
+
+The standard client for Gateway-based bots. Extends `BaseClient` with WebSocket functionality.
+
+**Key Features:**
+- Gateway connection management via `ShardManager`
+- Event handling system
+- Real-time Discord events
+- Presence and member update handlers
+- Collector support
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client({
+  presence: (shardId) => ({
+    activities: [{
+      name: 'Seyfert Bot',
+      type: 0
+    }],
+    status: 'online'
+  }),
+  shards: {
+    start: 0,
+    end: 5
+  },
+  gateway: {
+    compress: true
+  }
+});
+
+await client.start();
+```
+
+**Lifecycle:**
+1. `start()` - Load commands, components, and events
+2. `execute()` - Spawn shards and connect to gateway
+3. `onPacket()` - Process incoming gateway events
+4. Events: `READY` → `GUILDS_READY` → `BOT_READY`
+
+### WorkerClient
+
+Designed for distributed bot architectures using Node.js workers or clusters.
+
+**Key Features:**
+- Multi-process shard management
+- Worker-based load distribution
+- Inter-process communication
+- Resharding support
+- Worker proxy for API requests
+
+```typescript
+import { WorkerClient } from 'seyfert';
+
+const client = new WorkerClient({
+  handlePayload: async (shardId, packet) => {
+    // Custom payload handling per shard
+  },
+  sendPayloadToParent: false // Reduce memory for large bots
+});
+
+await client.start();
+```
+
+**Worker Communication:**
+The `WorkerClient` communicates with the main process via message passing:
+
+```typescript
+// Send eval to specific worker
+client.tellWorker(workerId, (worker, vars) => {
+  return worker.shards.size;
+}, {});
+
+// Send eval to all workers
+const results = await client.tellWorkers((worker, vars) => {
+  return worker.latency;
+}, {});
+```
+
+### HttpClient
+
+Lightweight client for HTTP-only interactions (e.g., Cloudflare Workers, serverless environments).
+
+**Key Features:**
+- No gateway connection
+- Interaction-only responses
+- Minimal memory footprint
+- Perfect for edge deployment
+
+```typescript
+import { HttpClient } from 'seyfert';
+
+const client = new HttpClient();
+
+await client.start();
+
+// Handle incoming interactions
+const response = await client.onInteractionRequest(rawInteraction);
+```
+
+## Configuration
+
+### Client Options
+
+<ParamField path="commands.defaults" type="object">
+  Default handlers for command lifecycle events
+  
+  <Expandable title="properties">
+    <ParamField path="onRunError" type="function">
+      Called when a command execution fails
+    </ParamField>
+    <ParamField path="onOptionsError" type="function">
+      Called when option validation fails
+    </ParamField>
+    <ParamField path="onMiddlewaresError" type="function">
+      Called when middleware execution fails
+    </ParamField>
+    <ParamField path="onPermissionsFail" type="function">
+      Called when user lacks required permissions
+    </ParamField>
+    <ParamField path="onBotPermissionsFail" type="function">
+      Called when bot lacks required permissions
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="context" type="function">
+  Inject custom context into interactions
+  
+  ```typescript
+  context: (interaction) => ({
+    database: db,
+    config: appConfig
+  })
+  ```
+</ParamField>
+
+<ParamField path="globalMiddlewares" type="array">
+  Middlewares applied to all commands
+</ParamField>
+
+### Resource Shorters
+
+The client provides convenient access to Discord resources:
+
+```typescript
+// Available on all client types
+client.users      // User operations
+client.guilds     // Guild operations
+client.channels   // Channel operations
+client.messages   // Message operations
+client.members    // Member operations
+client.roles      // Role operations
+client.emojis     // Emoji operations
+client.webhooks   // Webhook operations
+client.threads    // Thread operations
+client.bans       // Ban operations
+client.voiceStates // Voice state operations
+client.interactions // Interaction responses
+```
+
+## Services
+
+Seyfert allows you to customize core services:
+
+```typescript
+import { ApiHandler, MemoryAdapter } from 'seyfert';
+
+client.setServices({
+  rest: new ApiHandler({
+    token: process.env.DISCORD_TOKEN,
+    retries: 3
+  }),
+  cache: {
+    adapter: new MemoryAdapter(),
+    disabledCache: {
+      messages: true,  // Disable message caching
+      presences: true  // Disable presence caching
+    }
+  },
+  langs: {
+    default: 'en-US',
+    aliases: {
+      'en': ['en-US', 'en-GB']
+    }
+  },
+  middlewares: {
+    customMiddleware: async (context) => {
+      // Custom middleware logic
+    }
+  }
+});
+```
+
+## Uploading Commands
+
+Register application commands with Discord:
+
+```typescript
+await client.uploadCommands({
+  applicationId: '123456789',
+  cachePath: './command-cache.json' // Prevent unnecessary uploads
+});
+```
+
+<Info>
+  The `cachePath` option prevents re-uploading commands that haven't changed, significantly reducing API calls during development.
+</Info>
+
+## Client Properties
+
+<ResponseField name="botId" type="string">
+  The bot's user ID (extracted from token or set manually)
+</ResponseField>
+
+<ResponseField name="applicationId" type="string">
+  The application ID (defaults to `botId`)
+</ResponseField>
+
+<ResponseField name="rest" type="ApiHandler">
+  REST API handler for Discord API requests
+</ResponseField>
+
+<ResponseField name="cache" type="Cache">
+  Cache manager for Discord resources
+</ResponseField>
+
+<ResponseField name="commands" type="CommandHandler">
+  Command handler managing all registered commands
+</ResponseField>
+
+<ResponseField name="components" type="ComponentHandler">
+  Component handler for buttons, select menus, and modals
+</ResponseField>
+
+<ResponseField name="events" type="EventHandler">
+  Event handler (Client and WorkerClient only)
+</ResponseField>
+
+<ResponseField name="logger" type="Logger">
+  Built-in logger for debugging and info messages
+</ResponseField>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Choose the Right Client">
+    - **Small to medium bots**: Use `Client`
+    - **Large bots (1000+ guilds)**: Use `WorkerClient` for horizontal scaling
+    - **Serverless/Edge**: Use `HttpClient`
+  </Accordion>
+
+  <Accordion title="Error Handling">
+    Always implement error handlers in client options:
+    
+    ```typescript
+    new Client({
+      commands: {
+        defaults: {
+          onRunError: (ctx, error) => {
+            console.error(`Command ${ctx.command.name} failed:`, error);
+            ctx.editOrReply({ content: 'An error occurred!' });
+          }
+        }
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Cache Management">
+    Disable unnecessary caches to reduce memory usage:
+    
+    ```typescript
+    client.setServices({
+      cache: {
+        disabledCache: {
+          messages: true,
+          presences: true,
+          voiceStates: true
+        }
+      }
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="/concepts/commands">
+    Learn about the command system
+  </Card>
+  <Card title="Events" icon="bolt" href="/concepts/events">
+    Handle Discord events
+  </Card>
+  <Card title="Cache" icon="database" href="/concepts/cache">
+    Understand caching strategies
+  </Card>
+  <Card title="Components" icon="grid" href="/concepts/components">
+    Work with interactive components
+  </Card>
+</CardGroup>

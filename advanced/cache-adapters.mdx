@@ -1,0 +1,556 @@
+---
+title: Cache Adapters
+description: Implement custom cache backends and optimize memory usage with cache adapters
+---
+
+Cache adapters allow you to customize how Seyfert stores Discord data (guilds, channels, members, messages, etc.). You can implement custom backends like Redis, implement memory limits, or disable caching entirely.
+
+## Overview
+
+Seyfert includes three built-in adapters:
+
+- **MemoryAdapter** - Default in-memory Map-based cache
+- **LimitedMemoryAdapter** - Memory cache with size/TTL limits per resource
+- **WorkerAdapter** - IPC-based cache for worker processes (automatic)
+
+## Adapter Interface
+
+All cache adapters implement the `Adapter` interface:
+
+```typescript
+export interface Adapter {
+  isAsync: boolean;
+  
+  // Lifecycle
+  start(): Awaitable<void>;
+  
+  // Querying
+  scan(query: string, keys?: boolean): Awaitable<any[] | string[]>;
+  get(key: string): Awaitable<any | null>;
+  bulkGet(keys: string[]): Awaitable<any[]>;
+  
+  // Writing
+  set(key: string, data: any): Awaitable<void>;
+  bulkSet(keyValue: [string, any][]): Awaitable<void>;
+  patch(key: string, data: any): Awaitable<void>;
+  bulkPatch(keyValue: [string, any][]): Awaitable<void>;
+  
+  // Deleting
+  remove(key: string): Awaitable<void>;
+  bulkRemove(keys: string[]): Awaitable<void>;
+  flush(): Awaitable<void>;
+  
+  // Collections
+  keys(to: string): Awaitable<string[]>;
+  values(to: string): Awaitable<any[]>;
+  count(to: string): Awaitable<number>;
+  contains(to: string, key: string): Awaitable<boolean>;
+  
+  // Relationships
+  getToRelationship(to: string): Awaitable<string[]>;
+  addToRelationship(to: string, keys: string | string[]): Awaitable<void>;
+  bulkAddToRelationShip(data: Record<string, string[]>): Awaitable<void>;
+  removeToRelationship(to: string, keys: string | string[]): Awaitable<void>;
+  removeRelationship(to: string | string[]): Awaitable<void>;
+}
+```
+
+Source: [src/cache/adapters/types.ts:1-44](file:///home/daytona/workspace/source/src/cache/adapters/types.ts:1)
+
+## Built-in Adapters
+
+### MemoryAdapter
+
+Default adapter using JavaScript `Map` for storage:
+
+```typescript
+import { Client, MemoryAdapter } from 'seyfert';
+
+const client = new Client();
+
+client.setServices({
+  cache: {
+    adapter: new MemoryAdapter()
+  }
+});
+```
+
+#### Custom Encoding
+
+Optimize memory by encoding cached data:
+
+```typescript
+import { MemoryAdapter } from 'seyfert';
+import { gzipSync, gunzipSync } from 'zlib';
+
+const adapter = new MemoryAdapter({
+  encode(data) {
+    // Compress data before storing
+    return gzipSync(JSON.stringify(data));
+  },
+  decode(data) {
+    // Decompress when retrieving
+    return JSON.parse(gunzipSync(data).toString());
+  }
+});
+```
+
+Source: [src/cache/adapters/default.ts:8-169](file:///home/daytona/workspace/source/src/cache/adapters/default.ts:8)
+
+### LimitedMemoryAdapter
+
+Cache with configurable size and TTL limits per resource type:
+
+```typescript
+import { Client, LimitedMemoryAdapter } from 'seyfert';
+
+const client = new Client();
+
+client.setServices({
+  cache: {
+    adapter: new LimitedMemoryAdapter({
+      // Default limits for all resources
+      default: {
+        limit: 1000,
+        expire: 3600000 // 1 hour in ms
+      },
+      
+      // Per-resource limits
+      message: {
+        limit: 100, // Keep only 100 messages
+        expire: 300000 // 5 minutes
+      },
+      
+      member: {
+        limit: 5000,
+        expire: undefined // No expiration
+      },
+      
+      presence: {
+        limit: 0, // Disable presence caching
+        expire: undefined
+      },
+      
+      guild: {
+        limit: Number.POSITIVE_INFINITY, // Unlimited
+        expire: undefined
+      }
+    })
+  }
+});
+```
+
+#### Available Resource Types
+
+- `guild` - Guild data
+- `user` - User data
+- `channel` - Channels
+- `role` - Roles
+- `member` - Guild members
+- `message` - Messages
+- `emoji` - Emojis
+- `sticker` - Stickers
+- `presence` - User presences
+- `voice_state` - Voice states
+- `ban` - Guild bans
+- `stage_instance` - Stage instances
+- `overwrite` - Permission overwrites
+
+Source: [src/cache/adapters/limited.ts:10-302](file:///home/daytona/workspace/source/src/cache/adapters/limited.ts:10)
+
+<Info>
+  `LimitedMemoryAdapter` uses `LimitedCollection` under the hood, which automatically evicts oldest entries when limits are reached.
+</Info>
+
+## Creating a Custom Adapter
+
+### Redis Adapter Example
+
+```typescript
+import type { Adapter } from 'seyfert/cache';
+import { createClient, type RedisClientType } from 'redis';
+
+export class RedisAdapter implements Adapter {
+  isAsync = true;
+  private client!: RedisClientType;
+  
+  constructor(private url: string) {}
+  
+  async start() {
+    this.client = createClient({ url: this.url });
+    await this.client.connect();
+  }
+  
+  async get(key: string) {
+    const data = await this.client.get(key);
+    return data ? JSON.parse(data) : null;
+  }
+  
+  async bulkGet(keys: string[]) {
+    const values = await this.client.mGet(keys);
+    return values
+      .filter(v => v !== null)
+      .map(v => JSON.parse(v!));
+  }
+  
+  async set(key: string, data: any) {
+    await this.client.set(key, JSON.stringify(data));
+  }
+  
+  async bulkSet(keyValue: [string, any][]) {
+    const pipeline = this.client.multi();
+    for (const [key, value] of keyValue) {
+      pipeline.set(key, JSON.stringify(value));
+    }
+    await pipeline.exec();
+  }
+  
+  async patch(key: string, data: any) {
+    const existing = await this.get(key);
+    await this.set(key, { ...existing, ...data });
+  }
+  
+  async bulkPatch(keyValue: [string, any][]) {
+    for (const [key, value] of keyValue) {
+      await this.patch(key, value);
+    }
+  }
+  
+  async scan(query: string, keys = false) {
+    const pattern = query.replace(/\*/g, '*');
+    const results: string[] = [];
+    
+    for await (const key of this.client.scanIterator({
+      MATCH: pattern,
+      COUNT: 100
+    })) {
+      results.push(key);
+    }
+    
+    if (keys) return results;
+    return this.bulkGet(results);
+  }
+  
+  async remove(key: string) {
+    await this.client.del(key);
+  }
+  
+  async bulkRemove(keys: string[]) {
+    await this.client.del(keys);
+  }
+  
+  async flush() {
+    await this.client.flushDb();
+  }
+  
+  async keys(to: string) {
+    const relationship = await this.getToRelationship(to);
+    return relationship.map(id => `${to}.${id}`);
+  }
+  
+  async values(to: string) {
+    const keys = await this.keys(to);
+    return this.bulkGet(keys);
+  }
+  
+  async count(to: string) {
+    const relationship = await this.getToRelationship(to);
+    return relationship.length;
+  }
+  
+  async contains(to: string, key: string) {
+    const relationship = await this.getToRelationship(to);
+    return relationship.includes(key);
+  }
+  
+  // Relationships stored as Redis sets
+  async getToRelationship(to: string) {
+    const members = await this.client.sMembers(`__rel__:${to}`);
+    return members;
+  }
+  
+  async addToRelationship(to: string, keys: string | string[]) {
+    const keysArray = Array.isArray(keys) ? keys : [keys];
+    if (keysArray.length === 0) return;
+    await this.client.sAdd(`__rel__:${to}`, keysArray);
+  }
+  
+  async bulkAddToRelationShip(data: Record<string, string[]>) {
+    const pipeline = this.client.multi();
+    for (const to in data) {
+      if (data[to].length > 0) {
+        pipeline.sAdd(`__rel__:${to}`, data[to]);
+      }
+    }
+    await pipeline.exec();
+  }
+  
+  async removeToRelationship(to: string, keys: string | string[]) {
+    const keysArray = Array.isArray(keys) ? keys : [keys];
+    if (keysArray.length === 0) return;
+    await this.client.sRem(`__rel__:${to}`, keysArray);
+  }
+  
+  async removeRelationship(to: string | string[]) {
+    const toArray = Array.isArray(to) ? to : [to];
+    const keys = toArray.map(t => `__rel__:${t}`);
+    await this.client.del(keys);
+  }
+}
+```
+
+### Using the Custom Adapter
+
+```typescript
+import { Client } from 'seyfert';
+import { RedisAdapter } from './redis-adapter';
+
+const client = new Client();
+
+client.setServices({
+  cache: {
+    adapter: new RedisAdapter('redis://localhost:6379')
+  }
+});
+
+await client.start();
+```
+
+## Understanding Cache Keys
+
+Seyfert uses a hierarchical key structure:
+
+```
+{resource}.{id}
+{resource}.{guildId}.{id}
+```
+
+**Examples:**
+- `guild.123456789` - Guild with ID 123456789
+- `channel.987654321` - Channel with ID 987654321
+- `member.123456789.111222333` - Member 111222333 in guild 123456789
+- `message.987654321.444555666` - Message 444555666 in channel 987654321
+
+### Querying with Wildcards
+
+The `scan` method supports wildcard patterns:
+
+```typescript
+// Get all guilds
+const guilds = await adapter.scan('guild.*');
+
+// Get all members in a specific guild
+const members = await adapter.scan('member.123456789.*');
+
+// Get all channels
+const channels = await adapter.scan('channel.*');
+
+// Get keys only (not values)
+const channelKeys = await adapter.scan('channel.*', true);
+```
+
+Source: [src/cache/adapters/default.ts:29-41](file:///home/daytona/workspace/source/src/cache/adapters/default.ts:29)
+
+## Relationships
+
+Relationships track which IDs belong to a parent resource:
+
+```typescript
+// Track that guild 123456789 has members 111, 222, 333
+await adapter.addToRelationship('member.123456789', ['111', '222', '333']);
+
+// Get all member IDs for the guild
+const memberIds = await adapter.getToRelationship('member.123456789');
+// ['111', '222', '333']
+
+// Check if a member exists
+const exists = await adapter.contains('member.123456789', '111');
+// true
+
+// Remove a member from relationships
+await adapter.removeToRelationship('member.123456789', '222');
+
+// Clear all member relationships for the guild
+await adapter.removeRelationship('member.123456789');
+```
+
+Source: [src/cache/adapters/default.ts:127-168](file:///home/daytona/workspace/source/src/cache/adapters/default.ts:127)
+
+## Disabling Cache
+
+Disable caching for specific resources:
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client();
+
+client.setServices({
+  cache: {
+    disabledCache: {
+      messages: true, // Disable message caching
+      presences: true, // Disable presence caching
+      voiceStates: true // Disable voice state caching
+    }
+  }
+});
+```
+
+Or disable all caching:
+
+```typescript
+client.setServices({
+  cache: {
+    disabledCache: true // Disable everything
+  }
+});
+```
+
+Or use a function for conditional disabling:
+
+```typescript
+client.setServices({
+  cache: {
+    disabledCache: (type) => {
+      // Disable caching for messages and presences
+      return type === 'messages' || type === 'presences';
+    }
+  }
+});
+```
+
+## Async Adapters
+
+Set `isAsync: true` for adapters with async operations:
+
+```typescript
+export class DatabaseAdapter implements Adapter {
+  isAsync = true; // Important!
+  
+  async get(key: string) {
+    return await this.db.query('SELECT * FROM cache WHERE key = ?', [key]);
+  }
+  
+  // ... other async methods
+}
+```
+
+<Warning>
+  When `isAsync: true`, Seyfert awaits all cache operations. This adds latency to event handling. Use async adapters only when necessary (e.g., external databases).
+</Warning>
+
+## Worker Cache Adapter
+
+For `WorkerManager` setups, cache operations can be proxied to the manager:
+
+```typescript
+import { WorkerManager } from 'seyfert';
+import { RedisAdapter } from './redis-adapter';
+
+const manager = new WorkerManager({
+  // ... options
+});
+
+// Set cache adapter on the manager
+const redis = new RedisAdapter('redis://localhost:6379');
+manager.setCache(redis);
+
+await manager.start();
+```
+
+Workers automatically use `WorkerAdapter` which forwards cache operations to the manager via IPC. This ensures:
+- Single cache connection (manager only)
+- Consistent cache state across workers
+- No connection overhead per worker
+
+Source: [src/websocket/discord/workermanager.ts:84-90](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:84)
+
+## Performance Considerations
+
+<AccordionGroup>
+  <Accordion title="Use LimitedMemoryAdapter for memory-constrained environments">
+    The default `MemoryAdapter` can consume significant RAM for large bots. Use `LimitedMemoryAdapter` to cap memory usage:
+    
+    ```typescript
+    new LimitedMemoryAdapter({
+      default: { limit: 1000 },
+      message: { limit: 50, expire: 300000 }
+    })
+    ```
+  </Accordion>
+  
+  <Accordion title="Async adapters add latency">
+    Each cache operation blocks event handling when `isAsync: true`. For high-throughput bots, prefer in-memory caching or consider disabling cache for certain events.
+  </Accordion>
+  
+  <Accordion title="Disable caching for unused data">
+    If your bot doesn't use messages or presences, disable caching to save memory:
+    
+    ```typescript
+    disabledCache: {
+      messages: true,
+      presences: true
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Batch operations when possible">
+    Use `bulkSet`, `bulkGet`, and `bulkPatch` instead of multiple single operations to reduce overhead:
+    
+    ```typescript
+    // Good
+    await adapter.bulkSet([
+      ['guild.123', guildData1],
+      ['guild.456', guildData2]
+    ]);
+    
+    // Less efficient
+    await adapter.set('guild.123', guildData1);
+    await adapter.set('guild.456', guildData2);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Testing Your Adapter
+
+Ensure your adapter correctly implements all methods:
+
+```typescript
+import { RedisAdapter } from './redis-adapter';
+
+const adapter = new RedisAdapter('redis://localhost:6379');
+await adapter.start();
+
+// Test basic operations
+await adapter.set('guild.123', { id: '123', name: 'Test Guild' });
+const guild = await adapter.get('guild.123');
+console.assert(guild.name === 'Test Guild');
+
+// Test relationships
+await adapter.addToRelationship('guild', '123');
+const guilds = await adapter.getToRelationship('guild');
+console.assert(guilds.includes('123'));
+
+// Test scan
+const allGuilds = await adapter.scan('guild.*');
+console.assert(allGuilds.length === 1);
+
+// Test remove
+await adapter.remove('guild.123');
+const removed = await adapter.get('guild.123');
+console.assert(removed === null);
+
+// Clean up
+await adapter.flush();
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Workers" icon="gears" href="/advanced/workers">
+    Use cache adapters with WorkerManager
+  </Card>
+  <Card title="Custom Context" icon="code" href="/advanced/custom-context">
+    Extend command contexts with custom data
+  </Card>
+</CardGroup>

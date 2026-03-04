@@ -1,0 +1,473 @@
+---
+title: Caching System
+description: Understanding Seyfert's caching architecture and memory management
+---
+
+## Overview
+
+Seyfert's caching system stores Discord resources (guilds, users, channels, etc.) in memory for fast access without repeated API calls. The cache is highly configurable and supports custom adapters for different storage backends.
+
+## Cache Architecture
+
+The cache is built on three key components:
+
+1. **Cache** - Main cache manager that coordinates resource caching
+2. **Adapters** - Storage backends (memory, Redis, custom)
+3. **Resources** - Typed wrappers for Discord entities
+
+```typescript
+import { Cache, MemoryAdapter } from 'seyfert';
+
+const cache = new Cache(
+  intents,           // Gateway intents
+  new MemoryAdapter(), // Storage adapter
+  {},                // Disabled cache config
+  client             // Client instance
+);
+```
+
+## Cache Resources
+
+Seyfert caches the following Discord resources:
+
+### Guild-Based Resources
+
+Stored with guild scope (`guild.{guildId}.{resource}.{id}`):
+
+- **Members** - Guild members
+- **Voice States** - User voice connection states
+
+### Guild-Related Resources
+
+Stored per guild:
+
+- **Channels** - Guild channels and threads
+- **Roles** - Guild roles
+- **Emojis** - Custom guild emojis
+- **Stickers** - Custom guild stickers
+- **Presences** - User presence data (requires intent)
+- **Stage Instances** - Active stage channels
+- **Messages** - Recent messages (limited)
+- **Bans** - Guild bans
+- **Overwrites** - Permission overwrites
+
+### Non-Guild Resources
+
+Global resources:
+
+- **Users** - Discord users
+- **Guilds** - Guild data
+
+## Configuring Cache
+
+### Disabling Specific Caches
+
+Reduce memory usage by disabling unnecessary caches:
+
+```typescript
+import { Client } from 'seyfert';
+import { MemoryAdapter } from 'seyfert';
+
+const client = new Client();
+
+client.setServices({
+  cache: {
+    adapter: new MemoryAdapter(),
+    disabledCache: {
+      messages: true,    // Don't cache messages
+      presences: true,   // Don't cache presences
+      voiceStates: true, // Don't cache voice states
+      bans: true,        // Don't cache bans
+    }
+  }
+});
+```
+
+### Disable All Caches
+
+```typescript
+client.setServices({
+  cache: {
+    disabledCache: true // Disable all caching
+  }
+});
+```
+
+### Conditional Disabling
+
+```typescript
+client.setServices({
+  cache: {
+    disabledCache: (cacheType) => {
+      // Only cache guilds, channels, and users
+      return !['guilds', 'channels', 'users'].includes(cacheType);
+    }
+  }
+});
+```
+
+## Cache Adapters
+
+### MemoryAdapter
+
+Default in-memory storage using JavaScript Maps.
+
+```typescript
+import { MemoryAdapter } from 'seyfert';
+
+const adapter = new MemoryAdapter({
+  encode: (data) => data,  // Optional: encode before storing
+  decode: (data) => data   // Optional: decode when retrieving
+});
+
+client.setServices({
+  cache: { adapter }
+});
+```
+
+**Features:**
+- Fast access (O(1) lookups)
+- No external dependencies
+- Synchronous operations
+- Memory-resident data
+
+**Best for:** Small to medium bots (less than 1000 guilds)
+
+### LimitedMemoryAdapter
+
+Memory adapter with automatic eviction based on size limits.
+
+```typescript
+import { LimitedMemoryAdapter } from 'seyfert';
+
+const adapter = new LimitedMemoryAdapter({
+  maxSize: 1000 // Maximum items per resource type
+});
+```
+
+**Features:**
+- LRU (Least Recently Used) eviction
+- Prevents unbounded memory growth
+- Configurable size limits per resource
+
+**Best for:** Medium bots that need memory constraints
+
+### WorkerAdapter
+
+Adapter for distributed caching across worker threads.
+
+```typescript
+import { WorkerAdapter } from 'seyfert';
+
+const adapter = new WorkerAdapter({
+  postMessage: (message) => {
+    // Send cache operation to main thread
+    parentPort.postMessage(message);
+  }
+});
+```
+
+**Features:**
+- Async operations
+- Cross-worker communication
+- Shared cache state
+
+**Best for:** Large bots using `WorkerClient`
+
+### Custom Adapters
+
+Implement the `Adapter` interface for custom storage:
+
+```typescript
+import type { Adapter } from 'seyfert';
+
+class RedisAdapter implements Adapter {
+  isAsync = true;
+  
+  async start() {
+    // Initialize Redis connection
+    await this.redis.connect();
+  }
+  
+  async get(key: string) {
+    const data = await this.redis.get(key);
+    return data ? JSON.parse(data) : null;
+  }
+  
+  async set(key: string, value: any) {
+    await this.redis.set(key, JSON.stringify(value));
+  }
+  
+  async bulkGet(keys: string[]) {
+    const values = await this.redis.mget(keys);
+    return values.map(v => v ? JSON.parse(v) : null);
+  }
+  
+  async bulkSet(entries: [string, any][]) {
+    const pipeline = this.redis.pipeline();
+    for (const [key, value] of entries) {
+      pipeline.set(key, JSON.stringify(value));
+    }
+    await pipeline.exec();
+  }
+  
+  async patch(key: string, value: any) {
+    const existing = await this.get(key);
+    await this.set(key, { ...existing, ...value });
+  }
+  
+  async remove(key: string) {
+    await this.redis.del(key);
+  }
+  
+  async bulkRemove(keys: string[]) {
+    await this.redis.del(...keys);
+  }
+  
+  async keys(pattern: string) {
+    return this.redis.keys(pattern);
+  }
+  
+  async values(pattern: string) {
+    const keys = await this.keys(pattern);
+    return this.bulkGet(keys);
+  }
+  
+  async count(pattern: string) {
+    const keys = await this.keys(pattern);
+    return keys.length;
+  }
+  
+  async contains(key: string) {
+    return (await this.redis.exists(key)) === 1;
+  }
+  
+  async scan(pattern: string, keys = false) {
+    const matchedKeys = await this.redis.keys(pattern);
+    if (keys) return matchedKeys;
+    return this.bulkGet(matchedKeys);
+  }
+}
+
+client.setServices({
+  cache: {
+    adapter: new RedisAdapter()
+  }
+});
+```
+
+## Using the Cache
+
+### Accessing Cached Data
+
+```typescript
+// Get cached user
+const user = await client.cache.users?.get('123456789');
+
+// Get cached guild
+const guild = await client.cache.guilds?.get('987654321');
+
+// Get cached channel
+const channel = await client.cache.channels?.get('111222333');
+
+// Get guild member
+const member = await client.cache.members?.get('123456789', '987654321');
+
+// Get guild roles
+const roles = await client.cache.roles?.values('987654321');
+```
+
+### Cache Keys
+
+Seyfert uses a hierarchical key structure:
+
+```
+Non-guild: {resource}.{id}
+  Example: users.123456789
+
+Guild-based: {resource}.{guildId}.{id}
+  Example: members.987654321.123456789
+
+Guild-related: {guildId}.{resource}.{id}
+  Example: 987654321.channels.111222333
+```
+
+### Manual Cache Operations
+
+```typescript
+// Set value
+await client.cache.adapter.set('custom.key', { data: 'value' });
+
+// Get value
+const value = await client.cache.adapter.get('custom.key');
+
+// Remove value
+await client.cache.adapter.remove('custom.key');
+
+// Bulk operations
+await client.cache.adapter.bulkSet([
+  ['key1', data1],
+  ['key2', data2]
+]);
+
+const values = await client.cache.adapter.bulkGet(['key1', 'key2']);
+
+// Scan for keys
+const allUsers = await client.cache.adapter.scan('users.*');
+```
+
+## Cache Events
+
+The cache automatically updates based on gateway events:
+
+- `GUILD_CREATE` → Cache guild data
+- `GUILD_DELETE` → Remove guild from cache
+- `GUILD_UPDATE` → Update cached guild
+- `CHANNEL_CREATE` → Cache new channel
+- `GUILD_MEMBER_ADD` → Cache new member
+- `MESSAGE_CREATE` → Cache message (if enabled)
+- `PRESENCE_UPDATE` → Update presence cache
+- And more...
+
+## Memory Management
+
+### Monitor Cache Size
+
+```typescript
+// Get cache statistics
+const guildCount = await client.cache.guilds?.count();
+const userCount = await client.cache.users?.count();
+const channelCount = await client.cache.channels?.count();
+
+console.log(`Cached: ${guildCount} guilds, ${userCount} users, ${channelCount} channels`);
+```
+
+### Clear Cache
+
+```typescript
+// Clear specific guild cache
+await client.cache.guilds?.remove('987654321');
+
+// Clear all members of a guild
+const memberKeys = await client.cache.adapter.keys('members.987654321.*');
+await client.cache.adapter.bulkRemove(memberKeys);
+```
+
+### Periodic Cleanup
+
+```typescript
+// Clean up old messages every hour
+setInterval(async () => {
+  const messageKeys = await client.cache.adapter.keys('*.messages.*');
+  
+  for (const key of messageKeys) {
+    const message = await client.cache.adapter.get(key);
+    const age = Date.now() - message.timestamp;
+    
+    // Remove messages older than 1 hour
+    if (age > 3600000) {
+      await client.cache.adapter.remove(key);
+    }
+  }
+}, 3600000);
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Disable Unused Caches">
+    Only cache what you need:
+    
+    ```typescript
+    client.setServices({
+      cache: {
+        disabledCache: {
+          messages: true,    // High memory usage
+          presences: true,   // High update frequency
+          voiceStates: true, // Often not needed
+        }
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Use Intents Wisely">
+    Cache requires appropriate gateway intents:
+    
+    ```typescript
+    import { GatewayIntentBits } from 'seyfert/types';
+    
+    await client.start({
+      connection: {
+        intents: [
+          GatewayIntentBits.Guilds,          // For guild cache
+          GatewayIntentBits.GuildMembers,    // For member cache
+          GatewayIntentBits.GuildPresences,  // For presence cache
+        ]
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Fallback to API">
+    Always handle cache misses:
+    
+    ```typescript
+    // Try cache first, fallback to API
+    let user = await client.cache.users?.get(userId);
+    
+    if (!user) {
+      user = await client.users.fetch(userId);
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor Memory Usage">
+    Track cache growth in production:
+    
+    ```typescript
+    setInterval(async () => {
+      const stats = {
+        guilds: await client.cache.guilds?.count(),
+        users: await client.cache.users?.count(),
+        channels: await client.cache.channels?.count(),
+        members: await client.cache.adapter.count('members.*.*'),
+      };
+      
+      console.log('Cache stats:', stats);
+      
+      // Alert if cache grows too large
+      if (stats.users > 100000) {
+        console.warn('User cache exceeding limits!');
+      }
+    }, 300000); // Every 5 minutes
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Async Cache
+
+For async adapters (Redis, Database), enable async mode:
+
+```typescript
+// types.ts
+declare module 'seyfert' {
+  interface InternalOptions {
+    asyncCache: true;
+  }
+}
+
+// Now all cache operations return Promises
+const user = await client.cache.users?.get(userId); // Returns Promise
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Client" icon="code" href="/concepts/client">
+    Learn about client types
+  </Card>
+  <Card title="Events" icon="bolt" href="/concepts/events">
+    Handle cache-updating events
+  </Card>
+</CardGroup>

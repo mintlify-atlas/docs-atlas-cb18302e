@@ -1,0 +1,508 @@
+---
+title: Modal
+description: API reference for the Modal and TextInput builder classes
+---
+
+# Modal
+
+Modals are popup forms that can be presented to users in response to interactions. They contain text input fields and other form components.
+
+## Modal Class
+
+### Constructor
+
+```ts
+new Modal(data?: Partial<APIModalInteractionResponseCallbackData>)
+```
+
+Creates a new Modal instance with optional initial data.
+
+### Parameters
+
+- `data` (optional): Partial modal data to initialize with
+
+### Example
+
+```ts
+import { Modal } from 'seyfert/builders';
+
+const modal = new Modal();
+const modalWithData = new Modal({ 
+  title: 'Feedback Form',
+  custom_id: 'feedback_modal'
+});
+```
+
+## Properties
+
+### components
+
+```ts
+components: ModalBuilderComponents[]
+```
+
+Array of components (Action Rows) in the modal.
+
+### data
+
+```ts
+data: Partial<APIModalInteractionResponseCallbackData>
+```
+
+The underlying modal data structure.
+
+## Methods
+
+### setTitle
+
+```ts
+setTitle(title: string): this
+```
+
+Sets the title displayed at the top of the modal.
+
+#### Parameters
+
+- `title`: Modal title (max 45 characters)
+
+#### Example
+
+```ts
+modal.setTitle('Report a Bug');
+```
+
+### setCustomId
+
+```ts
+setCustomId(id: string): this
+```
+
+Sets the custom ID for the modal.
+
+#### Parameters
+
+- `id`: Custom identifier for this modal (max 100 characters)
+
+#### Example
+
+```ts
+modal.setCustomId('bug_report_modal');
+```
+
+### addComponents
+
+```ts
+addComponents(...components: RestOrArray<ModalBuilderComponents>): this
+```
+
+Adds one or more Action Row components to the modal.
+
+#### Parameters
+
+- `components`: Action Rows containing TextInput components
+
+#### Example
+
+```ts
+import { ActionRow, TextInput } from 'seyfert/builders';
+import { TextInputStyle } from 'seyfert/types';
+
+modal.addComponents(
+  new ActionRow<TextInput>().addComponents(
+    new TextInput()
+      .setCustomId('bug_title')
+      .setLabel('Bug Title')
+      .setStyle(TextInputStyle.Short)
+  )
+);
+```
+
+### setComponents
+
+```ts
+setComponents(component: ModalBuilderComponents[]): this
+```
+
+Sets the components of the modal, replacing any existing ones.
+
+#### Parameters
+
+- `component`: Array of Action Rows
+
+#### Example
+
+```ts
+const components = [
+  new ActionRow<TextInput>().addComponents(
+    new TextInput()
+      .setCustomId('input1')
+      .setLabel('Input 1')
+      .setStyle(TextInputStyle.Short)
+  )
+];
+
+modal.setComponents(components);
+```
+
+### run
+
+```ts
+run(func: ModalSubmitCallback): this
+```
+
+Sets a callback function to be executed when the modal is submitted.
+
+<Note>
+This is a convenience method for handling modal submissions inline. The callback is stored internally and can be executed when the modal submit interaction is received.
+</Note>
+
+#### Parameters
+
+- `func`: Callback function that receives the modal submit interaction
+
+#### Example
+
+```ts
+modal.run((interaction) => {
+  const title = interaction.fields.getTextInputValue('bug_title');
+  const description = interaction.fields.getTextInputValue('bug_description');
+  
+  // Process the submission
+  interaction.write({
+    content: `Thanks for reporting: ${title}`
+  });
+});
+```
+
+### toJSON
+
+```ts
+toJSON(): APIModalInteractionResponseCallbackData
+```
+
+Converts the Modal instance to a JSON object compatible with Discord's API.
+
+#### Returns
+
+The JSON representation of the modal.
+
+## TextInput Class
+
+Text inputs are form fields that accept user text input within modals.
+
+### Constructor
+
+```ts
+new TextInput(data?: Partial<APITextInputComponent>)
+```
+
+Creates a new TextInput instance.
+
+### Example
+
+```ts
+import { TextInput } from 'seyfert/builders';
+import { TextInputStyle } from 'seyfert/types';
+
+const input = new TextInput()
+  .setCustomId('username')
+  .setLabel('Username')
+  .setStyle(TextInputStyle.Short);
+```
+
+## TextInput Methods
+
+### setCustomId
+
+```ts
+setCustomId(id: string): this
+```
+
+Sets the custom ID for the text input.
+
+#### Parameters
+
+- `id`: Custom identifier (max 100 characters)
+
+#### Example
+
+```ts
+input.setCustomId('email_input');
+```
+
+### setLabel
+
+```ts
+setLabel(label: string): this
+```
+
+Sets the label displayed above the text input.
+
+#### Parameters
+
+- `label`: Label text (max 45 characters)
+
+#### Example
+
+```ts
+input.setLabel('Email Address');
+```
+
+### setStyle
+
+```ts
+setStyle(style: TextInputStyle): this
+```
+
+Sets the style of the text input.
+
+#### Parameters
+
+- `style`: Input style from the `TextInputStyle` enum
+  - `TextInputStyle.Short` (1) - Single-line input
+  - `TextInputStyle.Paragraph` (2) - Multi-line input
+
+#### Example
+
+```ts
+import { TextInputStyle } from 'seyfert/types';
+
+input.setStyle(TextInputStyle.Short); // Single line
+input.setStyle(TextInputStyle.Paragraph); // Multi-line
+```
+
+### setPlaceholder
+
+```ts
+setPlaceholder(placeholder: string): this
+```
+
+Sets the placeholder text shown when the input is empty.
+
+#### Parameters
+
+- `placeholder`: Placeholder text (max 100 characters)
+
+#### Example
+
+```ts
+input.setPlaceholder('Enter your email...');
+```
+
+### setValue
+
+```ts
+setValue(value: string): this
+```
+
+Sets the initial value of the text input.
+
+#### Parameters
+
+- `value`: Pre-filled text value
+
+#### Example
+
+```ts
+input.setValue('Default text here');
+```
+
+### setLength
+
+```ts
+setLength({ max, min }: Partial<{ max: number; min: number }>): this
+```
+
+Sets the minimum and maximum character length for the input.
+
+#### Parameters
+
+- `min`: Minimum characters (0-4000)
+- `max`: Maximum characters (1-4000)
+
+#### Example
+
+```ts
+input.setLength({ min: 10, max: 200 });
+```
+
+### setRequired
+
+```ts
+setRequired(required?: boolean): this
+```
+
+Sets whether the text input is required.
+
+#### Parameters
+
+- `required`: Whether input is required (default: `true`)
+
+#### Example
+
+```ts
+input.setRequired(); // Required
+input.setRequired(false); // Optional
+```
+
+## Complete Examples
+
+### Basic Feedback Modal
+
+```ts
+import { Modal, ActionRow, TextInput } from 'seyfert/builders';
+import { TextInputStyle } from 'seyfert/types';
+
+const modal = new Modal()
+  .setTitle('Feedback Form')
+  .setCustomId('feedback_modal')
+  .addComponents(
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('subject')
+        .setLabel('Subject')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Brief description')
+        .setRequired()
+        .setLength({ min: 5, max: 100 })
+    ),
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('feedback')
+        .setLabel('Your Feedback')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Tell us what you think...')
+        .setRequired()
+        .setLength({ min: 20, max: 1000 })
+    )
+  );
+
+// Show the modal
+await interaction.modal(modal);
+```
+
+### Bug Report Modal
+
+```ts
+import { Modal, ActionRow, TextInput } from 'seyfert/builders';
+import { TextInputStyle } from 'seyfert/types';
+
+const modal = new Modal()
+  .setTitle('Report a Bug')
+  .setCustomId('bug_report')
+  .addComponents(
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('bug_title')
+        .setLabel('Bug Title')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Short description of the bug')
+        .setRequired()
+    ),
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('steps')
+        .setLabel('Steps to Reproduce')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('1. Go to...\n2. Click on...\n3. See error')
+        .setRequired()
+    ),
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('expected')
+        .setLabel('Expected Behavior')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('What should happen?')
+    ),
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('actual')
+        .setLabel('Actual Behavior')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('What actually happened?')
+        .setRequired()
+    )
+  );
+
+await buttonInteraction.modal(modal);
+```
+
+### Modal with Callback
+
+```ts
+const modal = new Modal()
+  .setTitle('Quick Survey')
+  .setCustomId('survey_modal')
+  .addComponents(
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('rating')
+        .setLabel('Rate us (1-10)')
+        .setStyle(TextInputStyle.Short)
+        .setLength({ min: 1, max: 2 })
+    )
+  )
+  .run(async (interaction) => {
+    const rating = interaction.fields.getTextInputValue('rating');
+    const numRating = parseInt(rating);
+    
+    if (numRating >= 8) {
+      await interaction.write({
+        content: 'Thank you for the great rating! 🎉'
+      });
+    } else {
+      await interaction.write({
+        content: 'Thanks for your feedback. We\'ll work on improving!'
+      });
+    }
+  });
+
+await interaction.modal(modal);
+```
+
+### Pre-filled Edit Modal
+
+```ts
+const existingData = {
+  title: 'My Current Title',
+  content: 'This is the existing content that can be edited.'
+};
+
+const editModal = new Modal()
+  .setTitle('Edit Entry')
+  .setCustomId('edit_entry')
+  .addComponents(
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('title')
+        .setLabel('Title')
+        .setStyle(TextInputStyle.Short)
+        .setValue(existingData.title)
+    ),
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('content')
+        .setLabel('Content')
+        .setStyle(TextInputStyle.Paragraph)
+        .setValue(existingData.content)
+    )
+  );
+
+await interaction.modal(editModal);
+```
+
+## Limitations
+
+- Maximum 5 Action Rows per modal
+- Each Action Row can only contain 1 TextInput component
+- Maximum 5 TextInput components per modal
+- Title limited to 45 characters
+- Labels limited to 45 characters
+- Placeholder text limited to 100 characters
+- Input values limited to 4000 characters
+
+## See Also
+
+- [ActionRow](/api/builders/action-row) - Layout components in rows
+- [SelectMenu](/api/builders/select-menu) - Dropdown menus (can be used in modals)
+- [Interactions](/api/structures/interaction) - Handling modal submissions

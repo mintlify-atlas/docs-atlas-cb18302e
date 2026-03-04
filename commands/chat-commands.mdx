@@ -1,0 +1,338 @@
+---
+title: "Chat Commands"
+description: "Create powerful slash commands for your Discord bot"
+---
+
+## Overview
+
+Chat commands (slash commands) are Discord's native way for users to interact with your bot. Seyfert provides a robust system for creating, organizing, and handling these commands through the `Command` and `SubCommand` classes.
+
+## Basic Command Structure
+
+Every chat command in Seyfert extends the `Command` class. Here's a simple example:
+
+```typescript
+import { Command, Declare } from 'seyfert';
+import type { CommandContext } from 'seyfert';
+
+@Declare({
+  name: 'ping',
+  description: 'Check bot latency'
+})
+export default class PingCommand extends Command {
+  async run(ctx: CommandContext) {
+    await ctx.write({
+      content: `Pong! 🏓 Latency: ${ctx.client.gateway.latency}ms`
+    });
+  }
+}
+```
+
+<Note>
+  All commands must export the class as `default` and be placed in your configured commands directory.
+</Note>
+
+## Command Properties
+
+The `@Declare` decorator accepts several properties to configure your command:
+
+### Basic Properties
+
+- **name** (required): The command name users will type
+- **description** (required): A brief description shown in Discord
+- **nsfw**: Whether the command is age-restricted (default: `false`)
+- **guildId**: Array of guild IDs where this command is available (default: global)
+
+### Permission Properties
+
+```typescript
+@Declare({
+  name: 'ban',
+  description: 'Ban a user from the server',
+  defaultMemberPermissions: 'BanMembers',
+  botPermissions: 'BanMembers'
+})
+export default class BanCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Your ban logic here
+  }
+}
+```
+
+- **defaultMemberPermissions**: Permissions required to use the command
+- **botPermissions**: Permissions your bot needs to execute the command
+
+### Integration Properties
+
+```typescript
+@Declare({
+  name: 'avatar',
+  description: 'Get user avatar',
+  integrationTypes: ['GuildInstall', 'UserInstall'],
+  contexts: ['Guild', 'BotDM', 'PrivateChannel']
+})
+export default class AvatarCommand extends Command {
+  async run(ctx: CommandContext) {
+    const avatarUrl = ctx.author.avatarURL();
+    await ctx.write({ content: avatarUrl });
+  }
+}
+```
+
+- **integrationTypes**: Where the command can be installed
+- **contexts**: Where the command can be used
+
+## Subcommands
+
+Subcommands allow you to organize related functionality under a single parent command. Each subcommand is a separate class extending `SubCommand`.
+
+### Creating Subcommands
+
+```typescript
+// Parent command: settings.ts
+import { Command, Declare, Options } from 'seyfert';
+import SettingsViewSubCommand from './view.sub';
+import SettingsEditSubCommand from './edit.sub';
+
+@Declare({
+  name: 'settings',
+  description: 'Manage bot settings'
+})
+@Options([SettingsViewSubCommand, SettingsEditSubCommand])
+export default class SettingsCommand extends Command {}
+```
+
+```typescript
+// Subcommand: view.sub.ts
+import { SubCommand, Declare } from 'seyfert';
+import type { CommandContext } from 'seyfert';
+
+@Declare({
+  name: 'view',
+  description: 'View current settings'
+})
+export default class SettingsViewSubCommand extends SubCommand {
+  async run(ctx: CommandContext) {
+    // Display settings
+    await ctx.write({
+      content: 'Current settings: ...'
+    });
+  }
+}
+```
+
+<Tip>
+  Name your subcommand files with `.sub.ts` suffix to distinguish them from parent commands.
+</Tip>
+
+## Subcommand Groups
+
+For more complex organization, you can group related subcommands together:
+
+```typescript
+import { Command, Declare, Groups, Options, Group } from 'seyfert';
+
+@Declare({
+  name: 'mod',
+  description: 'Moderation commands'
+})
+@Groups({
+  user: {
+    defaultDescription: 'User moderation actions',
+    aliases: ['member']
+  },
+  channel: {
+    defaultDescription: 'Channel moderation actions'
+  }
+})
+@Options([UserBanSub, UserKickSub, ChannelLockSub, ChannelUnlockSub])
+export default class ModCommand extends Command {}
+```
+
+```typescript
+// user-ban.sub.ts
+import { SubCommand, Declare, Group } from 'seyfert';
+
+@Declare({
+  name: 'ban',
+  description: 'Ban a user'
+})
+@Group('user')
+export default class UserBanSub extends SubCommand {
+  async run(ctx: CommandContext) {
+    // Ban logic
+  }
+}
+```
+
+This creates the structure: `/mod user ban` and `/mod channel lock`
+
+## AutoLoad Subcommands
+
+For large commands with many subcommands, use `@AutoLoad()` to automatically load all subcommands from the same directory:
+
+```typescript
+import { Command, Declare, AutoLoad } from 'seyfert';
+
+@Declare({
+  name: 'admin',
+  description: 'Admin commands'
+})
+@AutoLoad()
+export default class AdminCommand extends Command {}
+```
+
+Place all subcommand files in the same directory as the parent command, and they'll be automatically discovered and registered.
+
+<Warning>
+  When using `@AutoLoad()`, don't manually specify subcommands with `@Options()`.
+</Warning>
+
+## Command Context
+
+The `CommandContext` object provides methods and properties to interact with the command execution:
+
+```typescript
+async run(ctx: CommandContext) {
+  // Respond to the command
+  await ctx.write({ content: 'Hello!' });
+  
+  // Defer the reply for long operations
+  await ctx.deferReply();
+  
+  // Edit the response
+  await ctx.editResponse({ content: 'Updated!' });
+  
+  // Send a follow-up message
+  await ctx.followup({ content: 'Additional info' });
+  
+  // Access user information
+  const user = ctx.author;
+  const member = ctx.member;
+  
+  // Get guild/channel data
+  const guild = await ctx.guild();
+  const channel = await ctx.channel();
+  
+  // Check if in guild
+  if (ctx.inGuild()) {
+    // Guild-specific logic
+  }
+}
+```
+
+## Lifecycle Hooks
+
+Seyfert provides several hooks to control command execution flow:
+
+```typescript
+export default class MyCommand extends Command {
+  // Called before middleware execution
+  async onBeforeMiddlewares(ctx: CommandContext) {
+    console.log('Before middlewares');
+  }
+  
+  // Called before option validation
+  async onBeforeOptions(ctx: CommandContext) {
+    console.log('Before options');
+  }
+  
+  // Main command logic
+  async run(ctx: CommandContext) {
+    // Command execution
+  }
+  
+  // Called after run completes
+  async onAfterRun(ctx: CommandContext, error: unknown | undefined) {
+    console.log('Command finished', error);
+  }
+  
+  // Handle execution errors
+  async onRunError(ctx: CommandContext, error: unknown) {
+    await ctx.write({ content: 'An error occurred!' });
+  }
+  
+  // Handle option validation errors
+  async onOptionsError(ctx: CommandContext, metadata: OnOptionsReturnObject) {
+    const errors = Object.entries(metadata)
+      .filter(([_, data]) => data.failed)
+      .map(([name, data]) => `${name}: ${data.value}`)
+      .join('\n');
+    await ctx.write({ content: `Validation errors:\n${errors}` });
+  }
+  
+  // Handle middleware errors
+  async onMiddlewaresError(ctx: CommandContext, error: string) {
+    await ctx.write({ content: `Middleware error: ${error}` });
+  }
+  
+  // Handle permission failures
+  async onPermissionsFail(ctx: CommandContext, permissions: PermissionStrings) {
+    await ctx.write({ 
+      content: `You need ${permissions} permission to use this command` 
+    });
+  }
+  
+  // Handle bot permission failures
+  async onBotPermissionsFail(ctx: CommandContext, permissions: PermissionStrings) {
+    await ctx.write({ 
+      content: `I need ${permissions} permission to execute this command` 
+    });
+  }
+}
+```
+
+## Guild-Only Commands
+
+Restrict commands to specific guilds during development:
+
+```typescript
+@Declare({
+  name: 'testcmd',
+  description: 'Testing command',
+  guildId: ['123456789012345678', '987654321098765432']
+})
+export default class TestCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Only available in specified guilds
+  }
+}
+```
+
+## Command Aliases
+
+Add alternative names for your commands:
+
+```typescript
+@Declare({
+  name: 'userinfo',
+  description: 'Get user information',
+  aliases: ['ui', 'whois', 'profile']
+})
+export default class UserInfoCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Works with /userinfo, /ui, /whois, or /profile
+  }
+}
+```
+
+<Note>
+  Aliases work with message-based command handling if you've enabled prefix commands.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Command Options" icon="sliders" href="/commands/options">
+    Learn how to add parameters to your commands
+  </Card>
+  <Card title="Decorators" icon="at" href="/commands/decorators">
+    Explore available decorators for commands
+  </Card>
+  <Card title="Middleware" icon="filter" href="/commands/middleware">
+    Add middleware to control command execution
+  </Card>
+  <Card title="Context Menus" icon="bars" href="/commands/context-menus">
+    Create right-click context menu commands
+  </Card>
+</CardGroup>

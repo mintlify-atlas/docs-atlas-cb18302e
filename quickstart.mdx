@@ -1,80 +1,253 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get your Discord bot up and running in minutes with Seyfert"
 ---
 
-## Get started in three steps
+## Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through creating your first Discord bot with Seyfert in just a few minutes.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Before you begin, make sure you have Node.js v18 or higher installed. We recommend using the LTS version.
 </Note>
+
+<Steps>
+  <Step title="Install Seyfert">
+    Choose your favorite package manager to install Seyfert:
+    
+    <CodeGroup>
+    ```bash npm
+    npm install seyfert
+    ```
+    
+    ```bash pnpm
+    pnpm add seyfert
+    ```
+    
+    ```bash yarn
+    yarn add seyfert
+    ```
+    
+    ```bash bun
+    bun add seyfert
+    ```
+    
+    ```bash deno
+    deno add npm:seyfert
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Get Your Discord Bot Token">
+    1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+    2. Click "New Application" and give it a name
+    3. Go to the "Bot" section in the sidebar
+    4. Click "Add Bot"
+    5. Under the token section, click "Reset Token" and copy your bot token
+    
+    <Warning>
+      Never share your bot token! Keep it secret and never commit it to version control.
+    </Warning>
+  </Step>
+  
+  <Step title="Create Your Bot Client">
+    Create a new file called `index.ts` (or `index.js` if not using TypeScript):
+    
+    ```typescript index.ts
+    import { Client, config } from 'seyfert';
+    
+    const client = new Client();
+    
+    client.start({
+      connection: config.bot({
+        token: process.env.DISCORD_TOKEN ?? '',
+        intents: ['Guilds', 'GuildMessages', 'MessageContent']
+      })
+    });
+    
+    console.log('Bot is starting...');
+    ```
+    
+    Create a `.env` file to store your token:
+    
+    ```bash .env
+    DISCORD_TOKEN=your_bot_token_here
+    ```
+    
+    <Tip>
+      Install `dotenv` to load environment variables: `npm install dotenv`
+    </Tip>
+  </Step>
+  
+  <Step title="Create Your First Command">
+    Create a `commands` directory and add a ping command:
+    
+    ```typescript commands/ping.ts
+    import { Command, type CommandContext } from 'seyfert';
+    
+    export default class PingCommand extends Command {
+      name = 'ping';
+      description = 'Check the bot latency';
+      
+      async run(ctx: CommandContext) {
+        const latency = ctx.client.gateway.latency;
+        await ctx.write({
+          content: `🏓 Pong! Latency: ${latency}ms`
+        });
+      }
+    }
+    ```
+    
+    <Info>
+      Commands are automatically discovered and loaded from your commands directory.
+    </Info>
+  </Step>
+  
+  <Step title="Add Event Handlers">
+    Create an `events` directory and add a ready event:
+    
+    ```typescript events/ready.ts
+    import { createEvent } from 'seyfert';
+    
+    export default createEvent({
+      data: { name: 'botReady', once: true },
+      run: (user, client) => {
+        console.log(`✅ ${user.username} is online!`);
+        console.log(`📊 Serving ${client.cache.guilds?.size ?? 0} guilds`);
+      }
+    });
+    ```
+  </Step>
+  
+  <Step title="Run Your Bot">
+    If using TypeScript, compile and run:
+    
+    ```bash
+    npx tsx index.ts
+    ```
+    
+    Or if using JavaScript:
+    
+    ```bash
+    node index.js
+    ```
+    
+    Your bot should now be online! Invite it to your server and try the `/ping` command.
+    
+    <Tip>
+      Use a process manager like PM2 for production deployments to keep your bot running reliably.
+    </Tip>
+  </Step>
+</Steps>
+
+## Next Steps
+
+Now that you have a basic bot running, explore more features:
+
+<CardGroup cols={2}>
+  <Card title="Core Concepts" icon="brain" href="/concepts/client">
+    Learn about clients, commands, events, and caching
+  </Card>
+  <Card title="Commands" icon="terminal" href="/commands/chat-commands">
+    Create powerful slash commands with options
+  </Card>
+  <Card title="Components" icon="cube" href="/components/buttons">
+    Add interactive buttons, menus, and modals
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/client/client">
+    Explore the complete API documentation
+  </Card>
+</CardGroup>
+
+## Example: A More Complete Bot
+
+Here's a slightly more advanced example with multiple commands and error handling:
+
+```typescript index.ts
+import { Client, config, ParseClient, ParseLocales } from 'seyfert';
+
+const client = new Client();
+
+// Load commands and events from directories
+client.start({
+  connection: config.bot({
+    token: process.env.DISCORD_TOKEN ?? '',
+    intents: [
+      'Guilds',
+      'GuildMessages',
+      'MessageContent',
+      'GuildMembers'
+    ]
+  }),
+  // Specify directories for auto-loading
+  commandsDir: './commands',
+  eventsDir: './events',
+  langsDir: './locales' // Optional: for i18n
+}).then(() => {
+  console.log('Bot started successfully!');
+}).catch(console.error);
+```
+
+```typescript commands/greet.ts
+import { Declare, Command, type CommandContext, Options, createStringOption } from 'seyfert';
+
+const options = {
+  name: createStringOption({
+    description: 'Name to greet',
+    required: true
+  })
+};
+
+@Declare({
+  name: 'greet',
+  description: 'Greet a user by name'
+})
+@Options(options)
+export default class GreetCommand extends Command {
+  async run(ctx: CommandContext<typeof options>) {
+    const name = ctx.options.name;
+    await ctx.write({
+      content: `👋 Hello, ${name}! Welcome to our server!`
+    });
+  }
+}
+```
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Bot doesn't respond to commands">
+    Make sure you've:
+    - Enabled the "Message Content" intent in the Developer Portal
+    - Invited the bot with the `applications.commands` scope
+    - Waited a few minutes for commands to register globally
+    - Used the correct token in your `.env` file
+  </Accordion>
+  
+  <Accordion title="Module not found errors">
+    If you see module errors:
+    - Make sure you installed all dependencies: `npm install`
+    - If using TypeScript, ensure your `tsconfig.json` is properly configured
+    - Check that file paths in your imports are correct
+  </Accordion>
+  
+  <Accordion title="Permission errors">
+    If the bot can't perform actions:
+    - Check that the bot has the required permissions in your Discord server
+    - Ensure you invited the bot with the correct OAuth2 scopes
+    - Verify the bot's role is high enough in the role hierarchy
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+Need assistance? Here are some resources:
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://discord.com/invite/XNw2RZFzaP">
+    Join our Discord server for help and support
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/tiramisulabs/seyfert/issues">
+    Report bugs or request features
+  </Card>
+</CardGroup>

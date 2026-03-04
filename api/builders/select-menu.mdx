@@ -1,0 +1,464 @@
+---
+title: Select Menu
+description: API reference for Select Menu builder classes
+---
+
+# Select Menu
+
+Select menus (dropdowns) allow users to choose from predefined options. Seyfert provides different types of select menus for various use cases.
+
+## Select Menu Types
+
+- **StringSelectMenu** - Select from custom string options
+- **UserSelectMenu** - Select Discord users
+- **RoleSelectMenu** - Select Discord roles
+- **ChannelSelectMenu** - Select Discord channels
+- **MentionableSelectMenu** - Select users or roles
+
+## Base SelectMenu Class
+
+All select menu types extend the base `SelectMenu` class with common methods.
+
+### Common Methods
+
+#### setCustomId
+
+```ts
+setCustomId(id: string): this
+```
+
+Sets the custom ID for the select menu.
+
+##### Example
+
+```ts
+selectMenu.setCustomId('user_selector');
+```
+
+#### setPlaceholder
+
+```ts
+setPlaceholder(placeholder: string): this
+```
+
+Sets the placeholder text shown when no option is selected.
+
+##### Example
+
+```ts
+selectMenu.setPlaceholder('Choose a user...');
+```
+
+#### setValuesLength
+
+```ts
+setValuesLength({ max, min }: Partial<{ max: number; min: number }>): this
+```
+
+Sets the minimum and maximum number of selections allowed.
+
+##### Parameters
+
+- `min`: Minimum selections (1-25)
+- `max`: Maximum selections (1-25)
+
+##### Example
+
+```ts
+selectMenu.setValuesLength({ min: 1, max: 5 });
+```
+
+#### setDisabled
+
+```ts
+setDisabled(disabled?: boolean): this
+```
+
+Sets whether the select menu is disabled.
+
+##### Example
+
+```ts
+selectMenu.setDisabled();
+selectMenu.setDisabled(false); // Enable
+```
+
+#### setRequired
+
+```ts
+setRequired(required?: boolean): this
+```
+
+Sets whether the select menu is required in a modal.
+
+##### Example
+
+```ts
+selectMenu.setRequired();
+```
+
+## StringSelectMenu
+
+### Constructor
+
+```ts
+new StringSelectMenu(data?: Partial<APIStringSelectComponent>)
+```
+
+Creates a select menu with custom string options.
+
+### Methods
+
+#### addOption
+
+```ts
+addOption(...options: RestOrArray<StringSelectOption>): this
+```
+
+Adds one or more options to the select menu.
+
+##### Example
+
+```ts
+import { StringSelectMenu, StringSelectOption } from 'seyfert/builders';
+
+const menu = new StringSelectMenu()
+  .setCustomId('color_select')
+  .addOption(
+    new StringSelectOption()
+      .setLabel('Red')
+      .setValue('red')
+      .setEmoji('🔴'),
+    new StringSelectOption()
+      .setLabel('Blue')
+      .setValue('blue')
+      .setEmoji('🔵')
+  );
+```
+
+#### setOptions
+
+```ts
+setOptions(options: StringSelectOption[]): this
+```
+
+Sets the options for the select menu, replacing any existing ones.
+
+##### Example
+
+```ts
+const options = [
+  new StringSelectOption().setLabel('Option 1').setValue('opt1'),
+  new StringSelectOption().setLabel('Option 2').setValue('opt2')
+];
+
+menu.setOptions(options);
+```
+
+## StringSelectOption
+
+Represents an individual option in a string select menu.
+
+### Constructor
+
+```ts
+new StringSelectOption(data?: Partial<APISelectMenuOption>)
+```
+
+### Methods
+
+#### setLabel
+
+```ts
+setLabel(label: string): this
+```
+
+Sets the display label for the option (max 100 characters).
+
+#### setValue
+
+```ts
+setValue(value: string): this
+```
+
+Sets the value that will be received when this option is selected (max 100 characters).
+
+#### setDescription
+
+```ts
+setDescription(description: string): this
+```
+
+Sets the description shown below the label (max 100 characters).
+
+#### setEmoji
+
+```ts
+setEmoji(emoji: EmojiResolvable): this
+```
+
+Sets the emoji displayed with the option.
+
+#### setDefault
+
+```ts
+setDefault(value?: boolean): this
+```
+
+Sets whether this option is selected by default.
+
+### Example
+
+```ts
+const option = new StringSelectOption()
+  .setLabel('Premium Plan')
+  .setValue('premium')
+  .setDescription('Full access to all features')
+  .setEmoji('⭐')
+  .setDefault();
+```
+
+## UserSelectMenu
+
+### Constructor
+
+```ts
+new UserSelectMenu(data?: Partial<APIUserSelectComponent>)
+```
+
+Creates a select menu for choosing Discord users.
+
+### Methods
+
+#### addDefaultUsers
+
+```ts
+addDefaultUsers(...users: RestOrArray<string>): this
+```
+
+Adds user IDs to the default selection.
+
+##### Example
+
+```ts
+const menu = new UserSelectMenu()
+  .setCustomId('team_select')
+  .setPlaceholder('Select team members')
+  .addDefaultUsers('123456789', '987654321')
+  .setValuesLength({ min: 1, max: 10 });
+```
+
+#### setDefaultUsers
+
+```ts
+setDefaultUsers(...users: RestOrArray<string>): this
+```
+
+Sets the default selected users, replacing any existing defaults.
+
+## RoleSelectMenu
+
+### Constructor
+
+```ts
+new RoleSelectMenu(data?: Partial<APIRoleSelectComponent>)
+```
+
+Creates a select menu for choosing Discord roles.
+
+### Methods
+
+#### addDefaultRoles
+
+```ts
+addDefaultRoles(...roles: RestOrArray<string>): this
+```
+
+Adds role IDs to the default selection.
+
+##### Example
+
+```ts
+const menu = new RoleSelectMenu()
+  .setCustomId('role_select')
+  .setPlaceholder('Choose roles to assign')
+  .addDefaultRoles('123456789')
+  .setValuesLength({ min: 1, max: 5 });
+```
+
+#### setDefaultRoles
+
+```ts
+setDefaultRoles(...roles: RestOrArray<string>): this
+```
+
+Sets the default selected roles, replacing any existing defaults.
+
+## ChannelSelectMenu
+
+### Constructor
+
+```ts
+new ChannelSelectMenu(data?: Partial<APIChannelSelectComponent>)
+```
+
+Creates a select menu for choosing Discord channels.
+
+### Methods
+
+#### addDefaultChannels
+
+```ts
+addDefaultChannels(...channels: RestOrArray<string>): this
+```
+
+Adds channel IDs to the default selection.
+
+#### setDefaultChannels
+
+```ts
+setDefaultChannels(...channels: RestOrArray<string>): this
+```
+
+Sets the default selected channels, replacing any existing defaults.
+
+#### setChannelTypes
+
+```ts
+setChannelTypes(types: ChannelType[]): this
+```
+
+Limits the select menu to specific channel types.
+
+##### Example
+
+```ts
+import { ChannelType } from 'seyfert/types';
+
+const menu = new ChannelSelectMenu()
+  .setCustomId('channel_select')
+  .setPlaceholder('Select a text channel')
+  .setChannelTypes([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
+```
+
+## MentionableSelectMenu
+
+### Constructor
+
+```ts
+new MentionableSelectMenu(data?: Partial<APIMentionableSelectComponent>)
+```
+
+Creates a select menu for choosing users or roles.
+
+### Methods
+
+#### setDefaultMentionables
+
+```ts
+setDefaultMentionables(...mentionables: RestOrArray<MentionableDefaultElement>): this
+```
+
+Sets the default selected users/roles.
+
+##### Parameters
+
+- `mentionables`: Array of objects with `id` and `type` (`'User'` or `'Role'`)
+
+##### Example
+
+```ts
+const menu = new MentionableSelectMenu()
+  .setCustomId('mention_select')
+  .setDefaultMentionables(
+    { id: '123456789', type: 'User' },
+    { id: '987654321', type: 'Role' }
+  );
+```
+
+#### addDefaultMentionables
+
+```ts
+addDefaultMentionables(...mentionables: RestOrArray<MentionableDefaultElement>): this
+```
+
+Adds to the default selected users/roles.
+
+## Complete Examples
+
+### String Select Menu
+
+```ts
+import { ActionRow, StringSelectMenu, StringSelectOption } from 'seyfert/builders';
+
+const menu = new StringSelectMenu()
+  .setCustomId('language_select')
+  .setPlaceholder('Choose your language')
+  .addOption(
+    new StringSelectOption()
+      .setLabel('English')
+      .setValue('en')
+      .setEmoji('🇬🇧')
+      .setDefault(),
+    new StringSelectOption()
+      .setLabel('Spanish')
+      .setValue('es')
+      .setEmoji('🇪🇸'),
+    new StringSelectOption()
+      .setLabel('French')
+      .setValue('fr')
+      .setEmoji('🇫🇷')
+  );
+
+const row = new ActionRow<StringSelectMenu>().addComponents(menu);
+
+await interaction.write({
+  content: 'Select your preferred language:',
+  components: [row]
+});
+```
+
+### User Select Menu
+
+```ts
+import { ActionRow, UserSelectMenu } from 'seyfert/builders';
+
+const menu = new UserSelectMenu()
+  .setCustomId('moderator_select')
+  .setPlaceholder('Select moderators')
+  .setValuesLength({ min: 1, max: 3 });
+
+const row = new ActionRow<UserSelectMenu>().addComponents(menu);
+
+await interaction.write({
+  content: 'Choose up to 3 moderators:',
+  components: [row]
+});
+```
+
+### Channel Select with Type Filter
+
+```ts
+import { ActionRow, ChannelSelectMenu } from 'seyfert/builders';
+import { ChannelType } from 'seyfert/types';
+
+const menu = new ChannelSelectMenu()
+  .setCustomId('log_channel')
+  .setPlaceholder('Select a text channel for logs')
+  .setChannelTypes([ChannelType.GuildText]);
+
+const row = new ActionRow<ChannelSelectMenu>().addComponents(menu);
+```
+
+## Limitations
+
+- Maximum 25 options per StringSelectMenu
+- Maximum 1 select menu per Action Row
+- Maximum 5 Action Rows per message
+- Default values are only visual hints, user can change selection
+
+## See Also
+
+- [ActionRow](/api/builders/action-row) - Layout select menus in rows
+- [Button](/api/builders/button) - Button components
+- [Modal](/api/builders/modal) - Modal dialogs with select menus

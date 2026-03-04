@@ -1,0 +1,442 @@
+---
+title: 'Formatter'
+description: 'Utilities for formatting Discord content with markdown and mentions'
+---
+
+## Formatter
+
+A utility object providing methods to format Discord messages with markdown, mentions, and other Discord-specific formatting.
+
+### Type Definition
+
+```typescript
+const Formatter: { ... }
+```
+
+## Text Formatting
+
+### codeBlock
+
+Formats content as a code block with optional syntax highlighting.
+
+```typescript
+codeBlock(content: string, language?: string): string
+```
+
+**Parameters:**
+- `content` - The code content
+- `language` - The syntax highlighting language (default: `'txt'`)
+
+**Example:**
+```typescript
+import { Formatter } from 'seyfert';
+
+const code = Formatter.codeBlock('console.log("Hello");', 'javascript');
+// Output: ```javascript\nconsole.log("Hello");\n```
+```
+
+### inlineCode
+
+Formats content as inline code.
+
+```typescript
+inlineCode(content: string): `\`${string}\``
+```
+
+**Example:**
+```typescript
+const code = Formatter.inlineCode('variable');
+// Output: `variable`
+```
+
+### bold
+
+Formats content as bold text.
+
+```typescript
+bold(content: string): `**${string}**`
+```
+
+**Example:**
+```typescript
+const text = Formatter.bold('Important!');
+// Output: **Important!**
+```
+
+### italic
+
+Formats content as italic text.
+
+```typescript
+italic(content: string): `*${string}*`
+```
+
+**Example:**
+```typescript
+const text = Formatter.italic('emphasis');
+// Output: *emphasis*
+```
+
+### underline
+
+Formats content as underlined text.
+
+```typescript
+underline(content: string): `__${string}__`
+```
+
+**Example:**
+```typescript
+const text = Formatter.underline('underlined');
+// Output: __underlined__
+```
+
+### strikeThrough
+
+Formats content as strikethrough text.
+
+```typescript
+strikeThrough(content: string): `~~${string}~~`
+```
+
+**Example:**
+```typescript
+const text = Formatter.strikeThrough('deleted');
+// Output: ~~deleted~~
+```
+
+### spoiler
+
+Formats content as a spoiler.
+
+```typescript
+spoiler(content: string): `||${string}||`
+```
+
+**Example:**
+```typescript
+const text = Formatter.spoiler('plot twist');
+// Output: ||plot twist||
+```
+
+### hyperlink
+
+Formats content as a hyperlink.
+
+```typescript
+hyperlink(content: string, url: string): `[${string}](${string})`
+```
+
+**Parameters:**
+- `content` - The link text
+- `url` - The URL to link to
+
+**Example:**
+```typescript
+const link = Formatter.hyperlink('Click here', 'https://discord.com');
+// Output: [Click here](https://discord.com)
+```
+
+### quote
+
+Formats content as a single-line quote.
+
+```typescript
+quote(content: string): string
+```
+
+**Example:**
+```typescript
+const text = Formatter.quote('This is a quote');
+// Output: > This is a quote
+```
+
+### blockQuote
+
+Formats content as a multi-line block quote.
+
+```typescript
+blockQuote(content: string): string
+```
+
+**Example:**
+```typescript
+const text = Formatter.blockQuote('This is a\nblock quote');
+// Output: >>> This is a\nblock quote
+```
+
+### header
+
+Formats content as a header.
+
+```typescript
+header(content: string, level?: HeadingLevel): string
+```
+
+**Parameters:**
+- `content` - The header text
+- `level` - The heading level (default: `HeadingLevel.H1`)
+
+**Heading Levels:**
+```typescript
+enum HeadingLevel {
+  H1 = 1, // #
+  H2 = 2, // ##
+  H3 = 3, // ###
+}
+```
+
+**Example:**
+```typescript
+import { Formatter, HeadingLevel } from 'seyfert';
+
+const h1 = Formatter.header('Title', HeadingLevel.H1);
+// Output: # Title
+
+const h2 = Formatter.header('Subtitle', HeadingLevel.H2);
+// Output: ## Subtitle
+```
+
+### list
+
+Formats an array of items as a list.
+
+```typescript
+list(items: string[], ordered?: boolean): string
+```
+
+**Parameters:**
+- `items` - Array of list items
+- `ordered` - Whether to create an ordered list (default: `false`)
+
+**Example:**
+```typescript
+const unordered = Formatter.list(['First', 'Second', 'Third']);
+// Output:
+// - First
+// - Second
+// - Third
+
+const ordered = Formatter.list(['First', 'Second', 'Third'], true);
+// Output:
+// 1. First
+// 2. Second
+// 3. Third
+```
+
+## Mentions
+
+### userMention
+
+Formats a user mention.
+
+```typescript
+userMention(userId: string): `<@${string}>`
+```
+
+**Example:**
+```typescript
+const mention = Formatter.userMention('123456789');
+// Output: <@123456789>
+```
+
+### roleMention
+
+Formats a role mention.
+
+```typescript
+roleMention(roleId: string): `<@&${string}>`
+```
+
+**Example:**
+```typescript
+const mention = Formatter.roleMention('987654321');
+// Output: <@&987654321>
+```
+
+### channelMention
+
+Formats a channel mention.
+
+```typescript
+channelMention(channelId: string): `<#${string}>`
+```
+
+**Example:**
+```typescript
+const mention = Formatter.channelMention('111222333');
+// Output: <#111222333>
+```
+
+### emojiMention
+
+Formats a custom emoji mention.
+
+```typescript
+emojiMention(emojiId: string, name: string | null, animated?: boolean): string
+```
+
+**Parameters:**
+- `emojiId` - The emoji ID
+- `name` - The emoji name (can be null)
+- `animated` - Whether the emoji is animated (default: `false`)
+
+**Example:**
+```typescript
+const emoji = Formatter.emojiMention('123456789', 'custom');
+// Output: <:custom:123456789>
+
+const animatedEmoji = Formatter.emojiMention('987654321', 'animated', true);
+// Output: <a:animated:987654321>
+```
+
+## Links and Timestamps
+
+### timestamp
+
+Formats a timestamp for Discord.
+
+```typescript
+timestamp(timestamp: Date, style?: TimestampStyle): `<t:${number}:${TimestampStyle}>`
+```
+
+**Timestamp Styles:**
+```typescript
+enum TimestampStyle {
+  ShortTime = 't',      // 16:20
+  LongTime = 'T',       // 16:20:30
+  ShortDate = 'd',      // 20/04/2021
+  LongDate = 'D',       // 20 April 2021
+  ShortDateTime = 'f',  // 20 April 2021 16:20
+  LongDateTime = 'F',   // Tuesday, 20 April 2021 16:20
+  RelativeTime = 'R',   // 2 months ago
+}
+```
+
+**Example:**
+```typescript
+import { Formatter, TimestampStyle } from 'seyfert';
+
+const now = new Date();
+const time = Formatter.timestamp(now, TimestampStyle.RelativeTime);
+// Output: <t:1234567890:R>
+```
+
+### messageLink
+
+Formats a link to a Discord message.
+
+```typescript
+messageLink(
+  guildId: string,
+  channelId: string,
+  messageId: string
+): `https://discord.com/channels/${string}/${string}/${string}`
+```
+
+**Example:**
+```typescript
+const link = Formatter.messageLink('123', '456', '789');
+// Output: https://discord.com/channels/123/456/789
+```
+
+### channelLink
+
+Formats a link to a Discord channel.
+
+```typescript
+channelLink(channelId: string, guildId?: string): string
+```
+
+**Parameters:**
+- `channelId` - The channel ID
+- `guildId` - The guild ID (default: `'@me'` for DMs)
+
+**Example:**
+```typescript
+const link = Formatter.channelLink('456', '123');
+// Output: https://discord.com/channels/123/456
+
+const dmLink = Formatter.channelLink('456');
+// Output: https://discord.com/channels/@me/456
+```
+
+### generateOAuth2URL
+
+Generates an OAuth2 authorization URL for a bot.
+
+```typescript
+generateOAuth2URL(
+  applicationId: string,
+  options: OAuth2URLOptions
+): string
+```
+
+**Options:**
+```typescript
+interface OAuth2URLOptions {
+  scopes: OAuth2Scopes[];
+  permissions: BitFieldResolvable<typeof PermissionFlagsBits>;
+  disableGuildSelect?: boolean;
+}
+```
+
+**Example:**
+```typescript
+import { Formatter, PermissionFlagsBits } from 'seyfert';
+
+const url = Formatter.generateOAuth2URL('123456789', {
+  scopes: ['bot', 'applications.commands'],
+  permissions: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.ViewChannel],
+  disableGuildSelect: false
+});
+```
+
+## Usage Examples
+
+### Rich Message Formatting
+
+```typescript
+import { Formatter, HeadingLevel, TimestampStyle } from 'seyfert';
+
+const message = [
+  Formatter.header('Welcome to our server!', HeadingLevel.H1),
+  '',
+  Formatter.bold('Please read the following rules:'),
+  Formatter.list([
+    'Be respectful to everyone',
+    'No spam or self-promotion',
+    'Keep conversations in appropriate channels'
+  ]),
+  '',
+  Formatter.italic('Questions? Contact ') + Formatter.userMention('123456789'),
+  '',
+  'Server started: ' + Formatter.timestamp(new Date(), TimestampStyle.LongDateTime)
+].join('\n');
+```
+
+### Code Examples in Messages
+
+```typescript
+import { Formatter } from 'seyfert';
+
+const helpMessage = [
+  'Use the following command:',
+  Formatter.codeBlock('!help [command]', 'bash'),
+  '',
+  'Example: ' + Formatter.inlineCode('!help ping')
+].join('\n');
+```
+
+### Navigation Messages
+
+```typescript
+import { Formatter } from 'seyfert';
+
+const navigation = [
+  Formatter.hyperlink('View Rules', 'https://example.com/rules'),
+  Formatter.hyperlink('Support Server', 'https://discord.gg/example'),
+  '',
+  'Check out ' + Formatter.channelMention('123456789') + ' for updates!'
+].join('\n');
+```

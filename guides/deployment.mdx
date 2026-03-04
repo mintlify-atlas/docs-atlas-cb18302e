@@ -1,0 +1,664 @@
+---
+title: "Deployment Guide"
+description: "Deploy your Seyfert Discord bot to production with best practices for scaling and reliability"
+---
+
+## Overview
+
+This guide covers deploying Seyfert bots to production, including environment configuration, process management, containerization, and scaling strategies.
+
+## Environment Configuration
+
+### Environment Variables
+
+Store sensitive configuration in environment variables:
+
+```bash .env
+# Discord Configuration
+DISCORD_TOKEN=your_bot_token_here
+DISCORD_APPLICATION_ID=your_app_id_here
+
+# Bot Configuration
+NODE_ENV=production
+LOG_LEVEL=info
+
+# Database (if applicable)
+DATABASE_URL=postgresql://user:pass@host:5432/db
+REDIS_URL=redis://localhost:6379
+
+# Cache Configuration
+CACHE_USERS=false
+CACHE_MEMBERS=true
+CACHE_CHANNELS=true
+
+# Sharding (for large bots)
+SHARD_COUNT=auto
+SHARDS_PER_WORKER=5
+```
+
+<Warning>
+  **Never commit your `.env` file to version control.** Add it to `.gitignore`.
+</Warning>
+
+### Loading Environment Variables
+
+Use the `dotenv` package in development:
+
+```typescript src/index.ts
+import 'dotenv/config';
+import { Client } from 'seyfert';
+
+const client = new Client({
+  token: process.env.DISCORD_TOKEN,
+  applicationId: process.env.DISCORD_APPLICATION_ID,
+});
+
+await client.start();
+```
+
+### Configuration Management
+
+```typescript src/config.ts
+interface Config {
+  token: string;
+  applicationId: string;
+  nodeEnv: 'development' | 'production';
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+  cache: {
+    users: boolean;
+    members: boolean;
+    channels: boolean;
+  };
+}
+
+export const config: Config = {
+  token: process.env.DISCORD_TOKEN!,
+  applicationId: process.env.DISCORD_APPLICATION_ID!,
+  nodeEnv: (process.env.NODE_ENV as any) || 'development',
+  logLevel: (process.env.LOG_LEVEL as any) || 'info',
+  cache: {
+    users: process.env.CACHE_USERS === 'true',
+    members: process.env.CACHE_MEMBERS !== 'false',
+    channels: process.env.CACHE_CHANNELS !== 'false',
+  },
+};
+
+// Validate required variables
+if (!config.token) {
+  throw new Error('DISCORD_TOKEN is required');
+}
+
+if (!config.applicationId) {
+  throw new Error('DISCORD_APPLICATION_ID is required');
+}
+```
+
+## Build Process
+
+### TypeScript Compilation
+
+```json package.json
+{
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "deploy": "npm run build && npm start"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "tsx": "^4.0.0"
+  },
+  "dependencies": {
+    "seyfert": "^4.2.0",
+    "dotenv": "^16.0.0"
+  }
+}
+```
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+Build your project:
+```bash
+npm run build
+```
+
+## Process Management
+
+### PM2 (Recommended)
+
+PM2 is a production process manager for Node.js applications:
+
+#### Installation
+
+```bash
+npm install -g pm2
+```
+
+#### PM2 Configuration
+
+```javascript ecosystem.config.js
+module.exports = {
+  apps: [
+    {
+      name: 'discord-bot',
+      script: './dist/index.js',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '1G',
+      env: {
+        NODE_ENV: 'production',
+        LOG_LEVEL: 'info',
+      },
+      error_file: './logs/error.log',
+      out_file: './logs/out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      min_uptime: '10s',
+      max_restarts: 10,
+    },
+  ],
+};
+```
+
+#### PM2 Commands
+
+```bash
+# Start the bot
+pm2 start ecosystem.config.js
+
+# View status
+pm2 status
+
+# View logs
+pm2 logs discord-bot
+
+# Restart
+pm2 restart discord-bot
+
+# Stop
+pm2 stop discord-bot
+
+# Monitor resources
+pm2 monit
+
+# Save process list (auto-restart on reboot)
+pm2 save
+pm2 startup
+```
+
+### systemd (Linux)
+
+Create a systemd service for automatic startup:
+
+```ini /etc/systemd/system/discord-bot.service
+[Unit]
+Description=Discord Bot
+After=network.target
+
+[Service]
+Type=simple
+User=botuser
+WorkingDirectory=/home/botuser/discord-bot
+Environment="NODE_ENV=production"
+EnvironmentFile=/home/botuser/discord-bot/.env
+ExecStart=/usr/bin/node /home/botuser/discord-bot/dist/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=discord-bot
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Manage the service:
+
+```bash
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Start service
+sudo systemctl start discord-bot
+
+# Enable auto-start on boot
+sudo systemctl enable discord-bot
+
+# View status
+sudo systemctl status discord-bot
+
+# View logs
+sudo journalctl -u discord-bot -f
+```
+
+## Docker Deployment
+
+### Dockerfile
+
+```dockerfile Dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY src ./src
+
+# Build TypeScript
+RUN npm run build
+
+# Production stage
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files and install production dependencies only
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copy built application
+COPY --from=builder /app/dist ./dist
+
+# Create non-root user
+RUN addgroup -g 1001 -S botuser && \
+    adduser -S botuser -u 1001
+
+USER botuser
+
+# Start bot
+CMD ["node", "dist/index.js"]
+```
+
+### Docker Compose
+
+```yaml docker-compose.yml
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    mem_limit: 512m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    mem_limit: 256m
+
+volumes:
+  redis_data:
+```
+
+### Docker Commands
+
+```bash
+# Build image
+docker compose build
+
+# Start services
+docker compose up -d
+
+# View logs
+docker compose logs -f bot
+
+# Restart bot
+docker compose restart bot
+
+# Stop services
+docker compose down
+
+# Update and restart
+docker compose pull && docker compose up -d
+```
+
+## Production Best Practices
+
+### Logging
+
+Configure appropriate log levels:
+
+```typescript src/index.ts
+import { Client, Logger } from 'seyfert';
+
+const client = new Client({
+  logger: new Logger({
+    logLevel: process.env.NODE_ENV === 'production' 
+      ? 'info' 
+      : 'debug',
+  }),
+});
+```
+
+### Error Handling
+
+Implement global error handlers:
+
+```typescript src/index.ts
+process.on('unhandledRejection', (error) => {
+  client.logger.fatal('Unhandled rejection:', error);
+});
+
+process.on('uncaughtException', (error) => {
+  client.logger.fatal('Uncaught exception:', error);
+  process.exit(1);
+});
+
+client.on('error', (error) => {
+  client.logger.error('Client error:', error);
+});
+```
+
+### Graceful Shutdown
+
+Handle shutdown signals properly:
+
+```typescript src/index.ts
+const shutdown = async (signal: string) => {
+  client.logger.info(`Received ${signal}, shutting down gracefully...`);
+  
+  // Stop accepting new interactions
+  client.gateway.disconnect();
+  
+  // Wait for pending operations
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
+  // Exit
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+```
+
+### Cache Optimization
+
+Disable unnecessary caching in production:
+
+```typescript src/index.ts
+const client = new Client({
+  cache: {
+    users: false,        // Disable if not needed
+    members: true,       // Enable for moderation bots
+    channels: true,      // Usually needed
+    messages: false,     // High memory usage
+    overwrites: false,   // Disable if not needed
+  },
+});
+```
+
+### Memory Management
+
+Monitor and limit memory usage:
+
+```typescript
+// Log memory usage periodically
+setInterval(() => {
+  const used = process.memoryUsage();
+  client.logger.debug('Memory usage:', {
+    rss: `${Math.round(used.rss / 1024 / 1024)}MB`,
+    heapUsed: `${Math.round(used.heapUsed / 1024 / 1024)}MB`,
+  });
+}, 60000); // Every minute
+```
+
+## Scaling Strategies
+
+### Sharding
+
+For bots in 2,500+ servers, use sharding:
+
+```typescript src/index.ts
+import { WorkerClient } from 'seyfert';
+import { GatewayIntentBits } from 'seyfert/lib/types';
+
+const client = new WorkerClient({
+  token: process.env.DISCORD_TOKEN!,
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+  ],
+  shards: {
+    mode: 'worker',
+    totalShards: 'auto', // Auto-calculate based on server count
+    shardsPerWorker: 5,
+  },
+});
+
+await client.start();
+```
+
+### Horizontal Scaling
+
+For very large bots, consider multiple instances:
+
+1. Use a shared database (PostgreSQL, MongoDB)
+2. Use Redis for shared cache
+3. Deploy multiple bot instances with different shard ranges
+4. Use a load balancer for HTTP interactions
+
+## Monitoring
+
+### Health Checks
+
+```typescript src/health.ts
+import { createServer } from 'http';
+
+const server = createServer((req, res) => {
+  if (req.url === '/health') {
+    const isHealthy = client.gateway.latency > 0;
+    res.writeHead(isHealthy ? 200 : 503);
+    res.end(JSON.stringify({
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      latency: client.gateway.latency,
+      uptime: process.uptime(),
+    }));
+  }
+});
+
+server.listen(3000);
+```
+
+### Metrics Collection
+
+```typescript
+// Track command usage
+client.commands.values.forEach(command => {
+  const originalRun = command.run.bind(command);
+  command.run = async (ctx) => {
+    const start = Date.now();
+    await originalRun(ctx);
+    const duration = Date.now() - start;
+    
+    client.logger.info(`Command ${command.name} executed in ${duration}ms`);
+  };
+});
+```
+
+## Deployment Platforms
+
+<Tabs>
+  <Tab title="VPS (DigitalOcean, Linode)">
+    **Pros:**
+    - Full control
+    - Cost-effective for 24/7 hosting
+    - Good for large bots
+    
+    **Setup:**
+    1. Create a VPS instance
+    2. Install Node.js and PM2
+    3. Clone your repository
+    4. Configure environment variables
+    5. Start with PM2
+    
+    **Recommended specs:**
+    - 1GB RAM minimum
+    - 1 CPU core
+    - 25GB SSD
+  </Tab>
+  
+  <Tab title="Railway">
+    **Pros:**
+    - Easy deployment
+    - GitHub integration
+    - Free tier available
+    
+    **Setup:**
+    1. Connect GitHub repository
+    2. Add environment variables
+    3. Railway auto-detects Node.js
+    4. Deploys automatically on push
+    
+    **Note:** Includes sleep on free tier
+  </Tab>
+  
+  <Tab title="Render">
+    **Pros:**
+    - Free tier (with limitations)
+    - Easy setup
+    - Auto-deploy from Git
+    
+    **Setup:**
+    1. Create new "Background Worker"
+    2. Connect repository
+    3. Set build command: `npm install && npm run build`
+    4. Set start command: `node dist/index.js`
+    5. Add environment variables
+  </Tab>
+  
+  <Tab title="Self-Hosted">
+    **Pros:**
+    - Complete control
+    - No costs (besides hardware/electricity)
+    - Best for development
+    
+    **Setup:**
+    1. Install Node.js
+    2. Use PM2 or systemd
+    3. Configure firewall
+    4. Set up automatic backups
+    
+    **Cons:**
+    - Requires maintenance
+    - Network dependency
+    - No redundancy
+  </Tab>
+</Tabs>
+
+## Security Considerations
+
+<AccordionGroup>
+  <Accordion title="Keep Dependencies Updated" icon="arrow-up">
+    ```bash
+    npm audit
+    npm update
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Environment Variables" icon="key">
+    Never hardcode tokens or secrets:
+    ```typescript
+    // ✅ Good
+    token: process.env.DISCORD_TOKEN
+    
+    // ❌ Bad
+    token: 'MTIzNDU2Nzg5MDEyMzQ1Njc4OQ.Gxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    ```
+  </Accordion>
+  
+  <Accordion title="Limit Bot Permissions" icon="shield">
+    Only request necessary intents and permissions:
+    ```typescript
+    intents: [
+      GatewayIntentBits.Guilds,
+      // Only add what you need
+    ]
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate User Input" icon="check">
+    Always validate and sanitize user input before processing.
+  </Accordion>
+  
+  <Accordion title="Run as Non-Root User" icon="user">
+    Never run your bot as root in production.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Bot Not Starting
+
+1. Check environment variables are set
+2. Verify token is valid
+3. Check Node.js version (v18+ required)
+4. Review error logs
+
+### High Memory Usage
+
+1. Disable unused cache options
+2. Implement sharding if in 2,500+ servers
+3. Check for memory leaks in collectors
+4. Limit concurrent operations
+
+### Connection Issues
+
+1. Check network connectivity
+2. Verify Discord API status
+3. Review gateway intents
+4. Check firewall settings
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Sharding Guide" icon="layer-group" href="/advanced/sharding">
+    Learn about sharding for large bots
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Implement robust error handling
+  </Card>
+  
+  <Card title="Performance" icon="gauge-high" href="/guides/error-handling">
+    Optimize your bot for production
+  </Card>
+</CardGroup>

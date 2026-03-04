@@ -1,0 +1,318 @@
+---
+title: Embed
+description: API reference for the Embed builder class
+---
+
+# Embed
+
+The `Embed` class provides a builder pattern for creating rich message embeds in Discord.
+
+## Constructor
+
+```ts
+new Embed(data?: Partial<APIEmbed>)
+```
+
+Creates a new Embed instance with optional initial data.
+
+### Parameters
+
+- `data` (optional): Partial embed data to initialize with
+
+### Example
+
+```ts
+const embed = new Embed();
+const embedWithData = new Embed({ 
+  title: 'Hello', 
+  description: 'This is an example embed' 
+});
+```
+
+## Properties
+
+### data
+
+```ts
+data: Partial<APIEmbed>
+```
+
+The underlying embed data structure.
+
+## Methods
+
+### setTitle
+
+```ts
+setTitle(title?: string): this
+```
+
+Sets the title of the embed.
+
+#### Parameters
+
+- `title`: The title text (max 256 characters)
+
+#### Example
+
+```ts
+embed.setTitle('Welcome to Seyfert');
+```
+
+### setDescription
+
+```ts
+setDescription(desc?: string): this
+```
+
+Sets the description of the embed.
+
+#### Parameters
+
+- `desc`: The description text (max 4096 characters)
+
+#### Example
+
+```ts
+embed.setDescription('A powerful Discord bot framework for TypeScript');
+```
+
+### setColor
+
+```ts
+setColor(color?: ColorResolvable): this
+```
+
+Sets the color of the embed's left border.
+
+#### Parameters
+
+- `color`: Hex color string (e.g., `#FF0000`), color name (e.g., `Blurple`), or numeric color value
+
+#### Example
+
+```ts
+embed.setColor('#FF0000');
+embed.setColor('Blurple');
+embed.setColor(0xFF0000);
+```
+
+### setAuthor
+
+```ts
+setAuthor(author?: ObjectToLower<APIEmbedAuthor>): this
+```
+
+Sets the author information displayed at the top of the embed.
+
+#### Parameters
+
+- `author`: Object containing author details
+  - `name`: Author name (required)
+  - `iconUrl`: URL for author icon (optional)
+  - `url`: URL for author name hyperlink (optional)
+
+#### Example
+
+```ts
+embed.setAuthor({ 
+  name: 'John Doe', 
+  iconUrl: 'https://example.com/avatar.png',
+  url: 'https://example.com/profile'
+});
+```
+
+### setFooter
+
+```ts
+setFooter(footer?: ObjectToLower<Omit<APIEmbedFooter, 'proxy_icon_url'>>): this
+```
+
+Sets the footer information displayed at the bottom of the embed.
+
+#### Parameters
+
+- `footer`: Object containing footer details
+  - `text`: Footer text (required)
+  - `iconUrl`: URL for footer icon (optional)
+
+#### Example
+
+```ts
+embed.setFooter({ 
+  text: 'Powered by Seyfert', 
+  iconUrl: 'https://example.com/footer.png' 
+});
+```
+
+### setImage
+
+```ts
+setImage(url?: string): this
+```
+
+Sets the main image displayed in the embed.
+
+#### Parameters
+
+- `url`: Image URL
+
+#### Example
+
+```ts
+embed.setImage('https://example.com/image.png');
+```
+
+### setThumbnail
+
+```ts
+setThumbnail(url?: string): this
+```
+
+Sets the thumbnail displayed in the top-right corner of the embed.
+
+#### Parameters
+
+- `url`: Thumbnail image URL
+
+#### Example
+
+```ts
+embed.setThumbnail('https://example.com/thumbnail.png');
+```
+
+### setURL
+
+```ts
+setURL(url?: string): this
+```
+
+Sets the URL that the embed title links to.
+
+#### Parameters
+
+- `url`: The URL to link to
+
+#### Example
+
+```ts
+embed.setURL('https://seyfert.dev');
+```
+
+### setTimestamp
+
+```ts
+setTimestamp(time?: string | number | Date): this
+```
+
+Sets the timestamp displayed in the footer.
+
+#### Parameters
+
+- `time`: Timestamp as Date object, Unix timestamp, or ISO string. Defaults to current time if not provided.
+
+#### Example
+
+```ts
+embed.setTimestamp(); // Current time
+embed.setTimestamp(new Date());
+embed.setTimestamp(1628761200000);
+embed.setTimestamp('2021-08-12T12:00:00Z');
+```
+
+### addFields
+
+```ts
+addFields(...fields: RestOrArray<APIEmbedField>): this
+```
+
+Adds one or more fields to the embed.
+
+#### Parameters
+
+- `fields`: Field objects to add (max 25 fields total)
+  - `name`: Field name (required)
+  - `value`: Field value (required)
+  - `inline`: Whether the field should be inline (optional)
+
+#### Example
+
+```ts
+embed.addFields(
+  { name: 'Field 1', value: 'Value 1', inline: true },
+  { name: 'Field 2', value: 'Value 2', inline: true }
+);
+```
+
+### setFields
+
+```ts
+setFields(fields?: APIEmbedField[]): this
+```
+
+Sets the fields of the embed, replacing any existing fields.
+
+#### Parameters
+
+- `fields`: Array of field objects
+
+#### Example
+
+```ts
+embed.setFields([
+  { name: 'Field 1', value: 'Value 1' },
+  { name: 'Field 2', value: 'Value 2' }
+]);
+```
+
+### toJSON
+
+```ts
+toJSON(): APIEmbed
+```
+
+Converts the Embed instance to a JSON object compatible with Discord's API.
+
+#### Returns
+
+The JSON representation of the embed.
+
+#### Example
+
+```ts
+const embedJSON = embed.toJSON();
+```
+
+## Complete Example
+
+```ts
+import { Embed } from 'seyfert/builders';
+
+const embed = new Embed()
+  .setTitle('Server Stats')
+  .setDescription('Current statistics for this server')
+  .setColor('Blurple')
+  .setAuthor({ 
+    name: 'Seyfert Bot', 
+    iconUrl: 'https://example.com/bot-avatar.png' 
+  })
+  .addFields(
+    { name: 'Members', value: '1,234', inline: true },
+    { name: 'Online', value: '567', inline: true },
+    { name: 'Channels', value: '42', inline: true }
+  )
+  .setThumbnail('https://example.com/server-icon.png')
+  .setFooter({ text: 'Last updated' })
+  .setTimestamp();
+
+// Use in a message
+await interaction.write({
+  embeds: [embed]
+});
+```
+
+## See Also
+
+- [ActionRow](/api/builders/action-row) - Layout components in rows
+- [Button](/api/builders/button) - Button components
+- [Message Write](/api/structures/message#write) - Sending messages with embeds

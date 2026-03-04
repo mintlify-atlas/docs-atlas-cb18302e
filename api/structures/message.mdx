@@ -1,0 +1,541 @@
+---
+title: Message
+description: API reference for the Message class in Seyfert
+---
+
+The `Message` class represents a Discord message with all its properties and methods for managing message content and interactions.
+
+## Constructor
+
+```typescript
+new Message(client: UsingClient, data: APIMessage | GatewayMessageCreateDispatchData)
+```
+
+## Properties
+
+### Core Properties
+
+- `id: string` - The message's unique identifier
+- `channelId: string` - ID of the channel the message was sent in
+- `guildId?: string` - ID of the guild (if sent in a guild)
+- `author: User` - The message author
+- `member?: GuildMember` - Guild member object (if sent in a guild)
+- `content: string` - Message content
+- `timestamp?: number` - Unix timestamp when message was sent (in milliseconds)
+- `editedTimestamp: number | null` - Unix timestamp when message was last edited
+- `tts: boolean` - Whether this was a TTS message
+- `mentionEveryone: boolean` - Whether this mentions @everyone
+- `attachments: APIAttachment[]` - Array of attached files
+- `embeds: InMessageEmbed[]` - Array of embeds (see [InMessageEmbed](#inmessageembed))
+- `components: TopLevelComponents[]` - Array of message components
+- `reactions?: APIReaction[]` - Array of reactions
+- `nonce?: string | number` - Used for validating message was sent
+- `pinned: boolean` - Whether this message is pinned
+- `webhookId?: string` - Webhook ID if sent by webhook
+- `type: MessageType` - Type of message
+- `activity?: MessageActivity` - Message activity
+- `application?: Partial<Application>` - Application data (for rich presence)
+- `applicationId?: string` - Application ID (for interactions)
+- `messageReference?: MessageReference` - Message reference data
+- `flags?: MessageFlags` - Message flags
+- `referencedMessage?: Message | null` - Referenced message (for replies)
+- `interaction?: MessageInteraction` - Interaction data
+- `thread?: ThreadChannel` - Thread started from this message
+- `poll?: Poll` - Poll data
+- `call?: MessageCall` - Call data
+
+### mentions
+
+Object containing parsed mentions:
+
+```typescript
+mentions: {
+  roles: string[];                              // Mentioned role IDs
+  channels: APIChannelMention[];                // Mentioned channels
+  users: (GuildMember | User)[];                // Mentioned users/members
+}
+```
+
+### Computed Properties
+
+#### user
+
+```typescript
+get user(): User
+```
+
+Alias for `author`.
+
+#### url
+
+```typescript
+get url(): string
+```
+
+Returns the message URL.
+
+**Example:**
+```typescript
+console.log(message.url);
+// https://discord.com/channels/123456789/987654321/111222333
+```
+
+## Methods
+
+### fetch
+
+```typescript
+fetch(force?: boolean): Promise<Message>
+```
+
+Fetches the message from the API.
+
+**Parameters:**
+- `force` - Whether to skip cache and fetch from API
+
+**Returns:** Promise resolving to the message
+
+**Example:**
+```typescript
+const freshMessage = await message.fetch(true);
+```
+
+### reply
+
+```typescript
+reply(body: Omit<MessageCreateBodyRequest, 'message_reference'>, fail?: boolean): Promise<Message>
+```
+
+Replies to the message.
+
+**Parameters:**
+- `body` - Message creation data (without message_reference)
+- `fail` - Whether to error if the referenced message doesn't exist (default: true)
+
+**Returns:** Promise resolving to the reply message
+
+**Example:**
+```typescript
+const reply = await message.reply({
+  content: 'Thanks for your message!'
+});
+```
+
+### edit
+
+```typescript
+edit(body: MessageUpdateBodyRequest): Promise<Message>
+```
+
+Edits the message (only works if bot sent it).
+
+**Parameters:**
+- `body` - Message update data
+
+**Returns:** Promise resolving to the edited message
+
+**Example:**
+```typescript
+await message.edit({
+  content: 'Updated content',
+  embeds: [{
+    title: 'Updated Embed'
+  }]
+});
+```
+
+### write
+
+```typescript
+write(body: MessageCreateBodyRequest): Promise<Message>
+```
+
+Sends a message to the same channel.
+
+**Parameters:**
+- `body` - Message creation data
+
+**Returns:** Promise resolving to the new message
+
+**Example:**
+```typescript
+await message.write({
+  content: 'New message in the same channel'
+});
+```
+
+### delete
+
+```typescript
+delete(reason?: string): Promise<void>
+```
+
+Deletes the message.
+
+**Parameters:**
+- `reason` - Audit log reason
+
+**Example:**
+```typescript
+await message.delete('Spam message');
+```
+
+### crosspost
+
+```typescript
+crosspost(reason?: string): Promise<Message>
+```
+
+Crossposts the message to following channels (for announcement channels).
+
+**Parameters:**
+- `reason` - Audit log reason
+
+**Returns:** Promise resolving to the crossposted message
+
+**Example:**
+```typescript
+await message.crosspost('Publishing announcement');
+```
+
+### react
+
+```typescript
+react(emoji: EmojiResolvable): Promise<void>
+```
+
+Adds a reaction to the message.
+
+**Parameters:**
+- `emoji` - Emoji to react with (Unicode emoji string or custom emoji ID/object)
+
+**Example:**
+```typescript
+await message.react('👍');
+await message.react('customemoji:123456789');
+```
+
+### guild
+
+```typescript
+guild(mode?: 'rest' | 'flow'): Promise<Guild | undefined>
+guild(mode: 'cache'): Guild | undefined
+```
+
+Fetches the guild this message was sent in.
+
+**Parameters:**
+- `mode` - Fetch mode ('cache', 'rest', or 'flow')
+
+**Returns:** The guild, or undefined if sent in DMs
+
+**Example:**
+```typescript
+const guild = await message.guild();
+if (guild) {
+  console.log(`Message sent in ${guild.name}`);
+}
+```
+
+### channel
+
+```typescript
+channel(mode?: 'rest' | 'flow'): Promise<AllChannels>
+channel(mode: 'cache'): AllChannels | undefined
+```
+
+Fetches the channel this message was sent in.
+
+**Parameters:**
+- `mode` - Fetch mode ('cache', 'rest', or 'flow')
+
+**Returns:** The channel
+
+**Example:**
+```typescript
+const channel = await message.channel();
+console.log(`Channel: ${channel.name}`);
+```
+
+### createComponentCollector
+
+```typescript
+createComponentCollector(options?: ListenerOptions): ComponentCollector
+```
+
+Creates a component collector for this message's components.
+
+**Parameters:**
+- `options` - Collector options (timeout, filter, etc.)
+
+**Returns:** Component collector instance
+
+**Example:**
+```typescript
+const collector = message.createComponentCollector({
+  timeout: 60000 // 1 minute
+});
+
+collector.on('collect', (interaction) => {
+  if (interaction.isButton()) {
+    console.log(`Button clicked: ${interaction.customId}`);
+  }
+});
+
+collector.on('end', (collected) => {
+  console.log(`Collected ${collected.size} interactions`);
+});
+```
+
+## WebhookMessage
+
+The `WebhookMessage` class extends `BaseMessage` and represents messages sent by webhooks.
+
+```typescript
+class WebhookMessage extends BaseMessage
+```
+
+### Constructor
+
+```typescript
+new WebhookMessage(
+  client: UsingClient,
+  data: MessageData,
+  webhookId: string,
+  webhookToken: string
+)
+```
+
+### Additional Properties
+
+- `webhookId: string` - The webhook's ID
+- `webhookToken: string` - The webhook's token
+
+### Methods
+
+#### fetchWebhook
+
+```typescript
+fetchWebhook(): Promise<Webhook>
+```
+
+Fetches the webhook that sent this message.
+
+**Example:**
+```typescript
+const webhook = await webhookMessage.fetchWebhook();
+console.log(webhook.name);
+```
+
+#### fetch
+
+```typescript
+fetch(): Promise<WebhookMessage>
+```
+
+Fetches the webhook message.
+
+#### edit
+
+```typescript
+edit(body: EditMessageWebhook): Promise<WebhookMessage>
+```
+
+Edits the webhook message.
+
+**Example:**
+```typescript
+await webhookMessage.edit({
+  content: 'Updated webhook message'
+});
+```
+
+#### write
+
+```typescript
+write(body: WriteMessageWebhook): Promise<WebhookMessage | null>
+```
+
+Sends a new message from the webhook.
+
+#### delete
+
+```typescript
+delete(reason?: string): Promise<void>
+```
+
+Deletes the webhook message.
+
+## InMessageEmbed
+
+The `InMessageEmbed` class represents an embed within a message.
+
+```typescript
+class InMessageEmbed
+```
+
+### Constructor
+
+```typescript
+new InMessageEmbed(data: APIEmbed)
+```
+
+### Properties
+
+- `title?: string` - Embed title
+- `type?: string` - Embed type
+- `description?: string` - Embed description
+- `url?: string` - Embed URL
+- `timestamp?: string` - ISO 8601 timestamp
+- `color?: number` - Color code
+- `footer?: { text: string; iconUrl?: string; proxyIconUrl?: string }` - Footer
+- `image?: { url: string; proxyUrl?: string; height?: number; width?: number }` - Image
+- `thumbnail?: { url: string; proxyUrl?: string; height?: number; width?: number }` - Thumbnail
+- `video?: { url?: string; proxyUrl?: string; height?: number; width?: number }` - Video
+- `provider?: { name?: string; url?: string }` - Provider
+- `author?: { name: string; url?: string; iconUrl?: string; proxyIconUrl?: string }` - Author
+- `fields?: { name: string; value: string; inline?: boolean }[]` - Fields
+
+### Methods
+
+#### toBuilder
+
+```typescript
+toBuilder(): Embed
+```
+
+Converts the embed to an Embed builder.
+
+**Example:**
+```typescript
+const embed = message.embeds[0];
+const builder = embed.toBuilder();
+builder.setTitle('New Title');
+```
+
+#### toJSON
+
+```typescript
+toJSON(): APIEmbed
+```
+
+Converts the embed to a plain JSON object.
+
+**Example:**
+```typescript
+const embedData = message.embeds[0].toJSON();
+console.log(embedData);
+```
+
+## Examples
+
+### Comprehensive Message Handling
+
+```typescript
+import { Command } from 'seyfert';
+import { MessageFlags } from 'seyfert/lib/types';
+
+export default class PingCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Send initial message
+    const msg = await ctx.write({
+      content: 'Pong! 🏓',
+      flags: MessageFlags.Ephemeral
+    });
+
+    // Edit the message
+    await msg.edit({
+      content: `Pong! Latency: ${ctx.client.gateway.latency}ms`
+    });
+
+    // Add reaction
+    await msg.react('✅');
+
+    // Reply to the message
+    await msg.reply({
+      content: 'This is a reply!'
+    });
+
+    // Get message info
+    console.log(`Message sent at: ${new Date(msg.timestamp!)}`);
+    console.log(`Message URL: ${msg.url}`);
+    console.log(`Author: ${msg.author.username}`);
+
+    // Get guild and channel
+    const guild = await msg.guild();
+    const channel = await msg.channel();
+  }
+}
+```
+
+### Component Collector
+
+```typescript
+import { ActionRow, Button } from 'seyfert/lib/builders';
+
+const message = await channel.messages.write({
+  content: 'Click a button!',
+  components: [
+    new ActionRow().setComponents([
+      new Button()
+        .setCustomId('yes')
+        .setLabel('Yes')
+        .setStyle(3),
+      new Button()
+        .setCustomId('no')
+        .setLabel('No')
+        .setStyle(4)
+    ])
+  ]
+});
+
+const collector = message.createComponentCollector({
+  timeout: 30000
+});
+
+collector.on('collect', async (interaction) => {
+  if (interaction.customId === 'yes') {
+    await interaction.update({ content: 'You clicked Yes!' });
+  } else {
+    await interaction.update({ content: 'You clicked No!' });
+  }
+  collector.stop();
+});
+
+collector.on('end', () => {
+  message.edit({
+    content: 'Time expired!',
+    components: []
+  });
+});
+```
+
+## Related Types
+
+```typescript
+type MessageData = APIMessage | GatewayMessageCreateDispatchData;
+
+interface MessageCreateBodyRequest {
+  content?: string;
+  tts?: boolean;
+  embeds?: (APIEmbed | Embed)[];
+  allowed_mentions?: AllowedMentions;
+  message_reference?: MessageReference;
+  components?: TopLevelComponents[];
+  sticker_ids?: string[];
+  files?: RawFile[];
+  attachments?: Attachment[];
+  flags?: MessageFlags;
+  poll?: Poll | PollBuilder;
+}
+
+interface MessageUpdateBodyRequest {
+  content?: string | null;
+  embeds?: (APIEmbed | Embed)[] | null;
+  flags?: MessageFlags | null;
+  allowed_mentions?: AllowedMentions | null;
+  components?: TopLevelComponents[];
+  files?: RawFile[];
+  attachments?: Attachment[] | null;
+}
+```

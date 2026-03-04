@@ -1,0 +1,309 @@
+---
+title: Client
+description: Full-featured Discord bot client with WebSocket gateway support
+---
+
+## Client
+
+The `Client` class extends `BaseClient` and provides full WebSocket gateway support for Discord bots. It handles real-time events, sharding, and maintains a persistent connection to Discord.
+
+### Constructor
+
+```typescript
+new Client<Ready extends boolean = boolean>(options?: ClientOptions)
+```
+
+<ParamField path="options" type="ClientOptions">
+  Optional configuration for the client
+</ParamField>
+
+### Properties
+
+Inherits all properties from `BaseClient`, plus:
+
+<ParamField path="gateway" type="ShardManager">
+  Shard manager for handling WebSocket connections
+</ParamField>
+
+<ParamField path="me" type="When<Ready, ClientUserStructure>">
+  The bot's user information (available when ready)
+</ParamField>
+
+<ParamField path="events" type="EventHandler">
+  Event handler for managing Discord gateway events
+</ParamField>
+
+<ParamField path="collectors" type="Collectors">
+  Collectors for awaiting specific events or interactions
+</ParamField>
+
+<ParamField path="memberUpdateHandler" type="MemberUpdateHandler">
+  Handler for member update events
+</ParamField>
+
+<ParamField path="presenceUpdateHandler" type="PresenceUpdateHandler">
+  Handler for presence update events
+</ParamField>
+
+<ParamField path="latency" type="number">
+  Average latency across all shards in milliseconds
+</ParamField>
+
+### Methods
+
+#### start()
+
+Starts the client and connects to Discord's gateway.
+
+```typescript
+await client.start(options?: {
+  eventsDir?: string;
+  langsDir?: string;
+  commandsDir?: string;
+  componentsDir?: string;
+  token?: string;
+  connection?: {
+    intents: number;
+  };
+}, execute?: boolean): Promise<void>
+```
+
+<ParamField path="options.eventsDir" type="string">
+  Directory containing event handler files
+</ParamField>
+
+<ParamField path="options.langsDir" type="string">
+  Directory containing language files
+</ParamField>
+
+<ParamField path="options.commandsDir" type="string">
+  Directory containing command files
+</ParamField>
+
+<ParamField path="options.componentsDir" type="string">
+  Directory containing component files
+</ParamField>
+
+<ParamField path="options.token" type="string">
+  Discord bot token
+</ParamField>
+
+<ParamField path="options.connection.intents" type="number">
+  Gateway intents bitmask
+</ParamField>
+
+<ParamField path="execute" type="boolean" default="true">
+  Whether to execute and connect to gateway
+</ParamField>
+
+#### loadEvents()
+
+Loads event handlers from a directory.
+
+```typescript
+await client.loadEvents(dir?: string): Promise<void>
+```
+
+<ParamField path="dir" type="string">
+  Directory containing event files (defaults to config)
+</ParamField>
+
+#### setServices()
+
+Configures services including the gateway shard manager.
+
+```typescript
+client.setServices(options: ServicesOptions & {
+  gateway?: ShardManager;
+}): void
+```
+
+<ParamField path="options.gateway" type="ShardManager">
+  Custom shard manager instance
+</ParamField>
+
+<ParamField path="options.rest" type="ApiHandler">
+  Custom REST API handler
+</ParamField>
+
+<ParamField path="options.cache" type="object">
+  Cache configuration
+</ParamField>
+
+<ParamField path="options.langs" type="object">
+  Language configuration
+</ParamField>
+
+<ParamField path="options.middlewares" type="Record<string, MiddlewareContext>">
+  Custom middleware functions
+</ParamField>
+
+## ClientOptions
+
+Configuration options for Client, extending BaseClientOptions.
+
+```typescript
+interface ClientOptions extends BaseClientOptions {
+  presence?: (shardId: number) => GatewayPresenceUpdateData;
+  shards?: {
+    start: number;
+    end: number;
+    total?: number;
+  };
+  gateway?: {
+    properties?: Partial<ShardManagerOptions['properties']>;
+    compress?: ShardManagerOptions['compress'];
+  };
+  commands?: BaseClientOptions['commands'] & {
+    prefix?: (message: MessageStructure) => Awaitable<string[]>;
+    deferReplyResponse?: (ctx: CommandContext) => Awaitable<Parameters<Message['write']>[0]>;
+    reply?: (ctx: CommandContext) => Awaitable<boolean>;
+  };
+  handlePayload?: (shardId: number, packet: GatewayDispatchPayload) => Awaitable<any>;
+  resharding?: {
+    getInfo?: () => Awaitable<GatewayBotInfo>;
+    interval?: number;
+    percentage?: number;
+  };
+}
+```
+
+<ParamField path="presence" type="function">
+  Function to generate presence data for each shard
+</ParamField>
+
+<ParamField path="shards" type="object">
+  Shard configuration
+  - `start`: First shard ID to spawn
+  - `end`: Last shard ID to spawn
+  - `total`: Total number of shards
+</ParamField>
+
+<ParamField path="gateway" type="object">
+  Gateway connection configuration
+  - `properties`: Gateway identify properties
+  - `compress`: Enable payload compression
+</ParamField>
+
+<ParamField path="commands.prefix" type="function">
+  Function to determine command prefixes for messages
+</ParamField>
+
+<ParamField path="commands.deferReplyResponse" type="function">
+  Custom response when deferring a reply
+</ParamField>
+
+<ParamField path="commands.reply" type="function">
+  Function to determine if command should reply
+</ParamField>
+
+<ParamField path="handlePayload" type="function">
+  Custom handler for gateway payloads
+</ParamField>
+
+<ParamField path="resharding" type="object">
+  Automatic resharding configuration
+  - `getInfo`: Function to get gateway bot info
+  - `interval`: Check interval in milliseconds
+  - `percentage`: Guild percentage threshold for resharding
+</ParamField>
+
+## Examples
+
+### Basic Usage
+
+```typescript
+import { Client } from 'seyfert';
+import { GatewayIntentBits } from 'seyfert/lib/types';
+
+const client = new Client();
+
+await client.start({
+  token: process.env.BOT_TOKEN,
+  connection: {
+    intents: GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages,
+  },
+});
+```
+
+### With Custom Presence
+
+```typescript
+import { Client } from 'seyfert';
+import { ActivityType } from 'seyfert/lib/types';
+
+const client = new Client({
+  presence: (shardId) => ({
+    activities: [
+      {
+        name: `Shard ${shardId}`,
+        type: ActivityType.Playing,
+      },
+    ],
+    status: 'online',
+    afk: false,
+  }),
+});
+
+await client.start();
+```
+
+### With Sharding
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client({
+  shards: {
+    start: 0,
+    end: 3,
+    total: 4,
+  },
+});
+
+await client.start();
+```
+
+### With Event Handlers
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client();
+
+await client.start({
+  eventsDir: './src/events',
+  commandsDir: './src/commands',
+});
+
+// Events are loaded from files
+// src/events/ready.ts
+// src/events/messageCreate.ts
+// etc.
+```
+
+### Custom Error Handling
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client({
+  commands: {
+    defaults: {
+      onRunError: async (context, error) => {
+        await context.editOrReply({
+          content: 'An error occurred while running this command.',
+        });
+        console.error('Command error:', error);
+      },
+      onPermissionsFail: async (context, permissions) => {
+        await context.editOrReply({
+          content: `You need the following permissions: ${permissions.join(', ')}`,
+        });
+      },
+    },
+  },
+});
+
+await client.start();
+```

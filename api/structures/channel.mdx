@@ -1,0 +1,722 @@
+---
+title: Channel
+description: API reference for Channel classes in Seyfert
+---
+
+Seyfert provides various channel classes representing different Discord channel types. All channel classes extend from `BaseChannel` or `BaseGuildChannel`.
+
+## Base Classes
+
+### BaseChannel
+
+Base class for all channels that can be edited.
+
+```typescript
+class BaseChannel<T extends ChannelType> extends BaseNoEditableChannel<T>
+```
+
+#### Methods
+
+##### edit
+
+```typescript
+edit(body: RESTPatchAPIChannelJSONBody, reason?: string): Promise<this>
+```
+
+Edits the channel's settings.
+
+**Example:**
+```typescript
+await channel.edit({
+  name: 'new-channel-name',
+  topic: 'Updated channel topic'
+});
+```
+
+##### fetch
+
+```typescript
+fetch(mode?: 'rest' | 'flow'): Promise<AllChannels>
+fetch(mode: 'cache'): AllChannels | undefined
+```
+
+Fetches the channel from cache or API.
+
+##### delete
+
+```typescript
+delete(reason?: string): Promise<AllChannels>
+```
+
+Deletes the channel.
+
+**Example:**
+```typescript
+await channel.delete('No longer needed');
+```
+
+### BaseGuildChannel
+
+Base class for all guild-specific channels.
+
+```typescript
+class BaseGuildChannel extends BaseChannel<ChannelType>
+```
+
+#### Properties
+
+- `guildId: string` - The ID of the guild this channel belongs to
+- `name: string` - The channel name
+- `position: number` - Sorting position
+- `parentId: string | null` - ID of the parent category
+- `permissionOverwrites: PermissionOverwrite[]` - Permission overwrites
+
+#### Methods
+
+##### guild
+
+```typescript
+guild(mode?: 'rest' | 'flow'): Promise<Guild>
+guild(mode: 'cache'): Guild | undefined
+```
+
+Fetches the guild this channel belongs to.
+
+**Example:**
+```typescript
+const guild = await channel.guild();
+console.log(guild.name);
+```
+
+##### setPosition
+
+```typescript
+setPosition(position: number, reason?: string): Promise<this>
+```
+
+Sets the channel's position.
+
+##### setName
+
+```typescript
+setName(name: string, reason?: string): Promise<this>
+```
+
+Sets the channel's name.
+
+**Example:**
+```typescript
+await channel.setName('announcements');
+```
+
+##### setParent
+
+```typescript
+setParent(parent_id: string | null, reason?: string): Promise<this>
+```
+
+Sets the channel's parent category.
+
+##### setRatelimitPerUser
+
+```typescript
+setRatelimitPerUser(rate_limit_per_user: number | null | undefined): Promise<this>
+```
+
+Sets the slowmode rate limit.
+
+**Example:**
+```typescript
+await channel.setRatelimitPerUser(5); // 5 second slowmode
+```
+
+##### setNsfw
+
+```typescript
+setNsfw(nsfw?: boolean, reason?: string): Promise<this>
+```
+
+Sets whether the channel is NSFW.
+
+##### memberPermissions
+
+```typescript
+memberPermissions(member: GuildMember, checkAdmin?: boolean): PermissionsBitField
+```
+
+Calculates permissions for a member in this channel.
+
+##### rolePermissions
+
+```typescript
+rolePermissions(role: GuildRole, checkAdmin?: boolean): PermissionsBitField
+```
+
+Calculates permissions for a role in this channel.
+
+##### invites
+
+```typescript
+invites.list(): Promise<Invite[]>
+invites.create(data: Omit<CreateInviteFromChannel, 'channelId'>): Promise<Invite>
+invites.delete(code: string, reason?: string): Promise<Invite>
+```
+
+Manage channel invites.
+
+**Example:**
+```typescript
+const invite = await channel.invites.create({
+  max_age: 3600,
+  max_uses: 10
+});
+```
+
+## Text Channels
+
+### TextGuildChannel
+
+Represents a guild text channel.
+
+```typescript
+class TextGuildChannel extends BaseGuildChannel
+```
+
+**Type:** `ChannelType.GuildText`
+
+#### Properties
+
+Inherits from `BaseGuildChannel` and adds:
+
+- `topic?: string | null` - The channel topic
+- `nsfw?: boolean` - Whether the channel is NSFW
+- `lastMessageId?: string | null` - ID of last message
+- `rateLimitPerUser?: number` - Slowmode delay in seconds
+- `defaultAutoArchiveDuration?: ThreadAutoArchiveDuration` - Default thread auto-archive duration
+
+#### Message Methods
+
+```typescript
+messages.write(body: MessageCreateBodyRequest): Promise<Message>
+messages.edit(messageId: string, body: MessageUpdateBodyRequest): Promise<Message>
+messages.delete(messageId: string, reason?: string): Promise<void>
+messages.fetch(messageId: string, force?: boolean): Promise<Message>
+messages.list(options: RESTGetAPIChannelMessagesQuery): Promise<Message[]>
+messages.purge(messages: string[], reason?: string): Promise<void>
+messages.crosspost(messageId: string, reason?: string): Promise<Message>
+```
+
+**Example:**
+```typescript
+const message = await channel.messages.write({
+  content: 'Hello, world!',
+  embeds: [{
+    title: 'Welcome',
+    description: 'Welcome to our server!'
+  }]
+});
+```
+
+#### Pin Methods
+
+```typescript
+pins.fetch(query?: RESTGetAPIChannelPinsQuery): Promise<Message[]>
+pins.set(messageId: string, reason?: string): Promise<void>
+pins.delete(messageId: string, reason?: string): Promise<void>
+```
+
+**Example:**
+```typescript
+await channel.pins.set(message.id, 'Important announcement');
+```
+
+#### Reaction Methods
+
+```typescript
+reactions.add(messageId: string, emoji: EmojiResolvable): Promise<void>
+reactions.delete(messageId: string, emoji: EmojiResolvable, userId?: string): Promise<void>
+reactions.fetch(messageId: string, emoji: EmojiResolvable, query?: RESTGetAPIChannelMessageReactionUsersQuery): Promise<User[]>
+reactions.purge(messageId: string, emoji?: EmojiResolvable): Promise<void>
+```
+
+**Example:**
+```typescript
+await channel.reactions.add(message.id, '👍');
+```
+
+#### Webhook Methods
+
+```typescript
+webhooks.list(): Promise<Webhook[]>
+webhooks.create(body: RESTPostAPIChannelWebhookJSONBody): Promise<Webhook>
+```
+
+**Example:**
+```typescript
+const webhook = await channel.webhooks.create({
+  name: 'My Webhook'
+});
+```
+
+#### Typing
+
+```typescript
+typing(): Promise<void>
+```
+
+Triggers typing indicator.
+
+**Example:**
+```typescript
+await channel.typing();
+// Bot appears to be typing for 10 seconds
+```
+
+### NewsChannel
+
+Represents an announcement/news channel.
+
+```typescript
+class NewsChannel extends BaseGuildChannel
+```
+
+**Type:** `ChannelType.GuildAnnouncement`
+
+Inherits all methods from `TextGuildChannel` and adds:
+
+#### addFollower
+
+```typescript
+addFollower(webhookChannelId: string, reason?: string): Promise<void>
+```
+
+Adds a follower to the news channel (creates a webhook in the target channel).
+
+**Example:**
+```typescript
+await newsChannel.addFollower('987654321', 'Following announcements');
+```
+
+## Voice Channels
+
+### VoiceChannel
+
+Represents a guild voice channel.
+
+```typescript
+class VoiceChannel extends BaseGuildChannel
+```
+
+**Type:** `ChannelType.GuildVoice`
+
+#### Properties
+
+- `bitrate: number` - The bitrate (in bits) of the voice channel
+- `userLimit: number` - User limit (0 for unlimited)
+- `rtcRegion: string | null` - Voice region
+- `videoQualityMode?: VideoQualityMode` - Video quality mode
+
+#### Methods
+
+##### setBitrate
+
+```typescript
+setBitrate(bitrate: number | null, reason?: string): Promise<this>
+```
+
+Sets the channel bitrate.
+
+**Example:**
+```typescript
+await voiceChannel.setBitrate(96000);
+```
+
+##### setUserLimit
+
+```typescript
+setUserLimit(user_limit: number | null, reason?: string): Promise<this>
+```
+
+Sets the user limit.
+
+**Example:**
+```typescript
+await voiceChannel.setUserLimit(10);
+```
+
+##### setRTC
+
+```typescript
+setRTC(rtc_region: string | null, reason?: string): Promise<this>
+```
+
+Sets the voice region.
+
+##### setVideoQuality
+
+```typescript
+setVideoQuality(quality: keyof typeof VideoQualityMode, reason?: string): Promise<this>
+```
+
+Sets the video quality mode.
+
+**Example:**
+```typescript
+await voiceChannel.setVideoQuality('Full');
+```
+
+##### setVoiceStatus
+
+```typescript
+setVoiceStatus(status: string | null): Promise<void>
+```
+
+Sets the voice channel status.
+
+##### states
+
+```typescript
+states(): VoiceState[]
+```
+
+Gets all voice states for users in this channel.
+
+##### members
+
+```typescript
+members(force?: boolean): Promise<Collection<string, GuildMember>>
+```
+
+Gets all members currently in this voice channel.
+
+**Example:**
+```typescript
+const members = await voiceChannel.members();
+console.log(`${members.size} users in voice`);
+```
+
+### StageChannel
+
+Represents a stage channel.
+
+```typescript
+class StageChannel extends BaseGuildChannel
+```
+
+**Type:** `ChannelType.GuildStageVoice`
+
+Inherits voice channel methods and adds:
+
+#### setTopic
+
+```typescript
+setTopic(topic: string | null, reason?: string): Promise<this>
+```
+
+Sets the stage topic.
+
+**Example:**
+```typescript
+await stageChannel.setTopic('Weekly Community Discussion');
+```
+
+## Thread Channels
+
+### ThreadChannel
+
+Represents a thread channel.
+
+```typescript
+class ThreadChannel extends BaseChannel
+```
+
+**Types:** `ChannelType.PublicThread | ChannelType.PrivateThread | ChannelType.AnnouncementThread`
+
+#### Properties
+
+- `parentId: string` - Parent channel ID (required)
+- `ownerId: string` - Thread creator ID
+- `messageCount: number` - Approximate message count
+- `memberCount: number` - Approximate member count
+- `archived: boolean` - Whether the thread is archived
+- `autoArchiveDuration: ThreadAutoArchiveDuration` - Auto-archive duration
+- `archiveTimestamp: number` - When thread will auto-archive
+- `locked: boolean` - Whether the thread is locked
+- `invitable?: boolean` - Whether non-moderators can add users (private threads)
+
+#### Methods
+
+##### join
+
+```typescript
+join(): Promise<this>
+```
+
+Joins the thread.
+
+**Example:**
+```typescript
+await thread.join();
+```
+
+##### leave
+
+```typescript
+leave(): Promise<this>
+```
+
+Leaves the thread.
+
+##### setTags
+
+```typescript
+setTags(applied_tags: string[], reason?: string): Promise<this>
+```
+
+Sets the applied forum tags (for forum threads).
+
+**Example:**
+```typescript
+await thread.setTags(['tag-id-1', 'tag-id-2']);
+```
+
+##### setArchived
+
+```typescript
+setArchived(archived?: boolean, reason?: string): Promise<this>
+```
+
+Archives or unarchives the thread.
+
+**Example:**
+```typescript
+await thread.setArchived(true);
+```
+
+##### setAutoArchiveDuration
+
+```typescript
+setAutoArchiveDuration(auto_archive_duration: ThreadAutoArchiveDuration, reason?: string): Promise<this>
+```
+
+Sets the auto-archive duration.
+
+##### setInvitable
+
+```typescript
+setInvitable(invitable?: boolean, reason?: string): Promise<this>
+```
+
+Sets whether non-moderators can invite users (private threads only).
+
+##### setLocked
+
+```typescript
+setLocked(locked?: boolean, reason?: string): Promise<this>
+```
+
+Locks or unlocks the thread.
+
+**Example:**
+```typescript
+await thread.setLocked(true, 'Resolved');
+```
+
+##### pin/unpin
+
+```typescript
+pin(reason?: string): Promise<this>
+unpin(reason?: string): Promise<this>
+```
+
+Pins or unpins the thread in the parent forum/media channel.
+
+## Forum & Media Channels
+
+### ForumChannel
+
+Represents a forum channel.
+
+```typescript
+class ForumChannel extends BaseGuildChannel
+```
+
+**Type:** `ChannelType.GuildForum`
+
+#### Properties
+
+- `availableTags: APIGuildForumTag[]` - Available forum tags
+- `defaultReactionEmoji: APIGuildForumDefaultReactionEmoji | null` - Default reaction emoji
+- `defaultSortOrder: SortOrderType | null` - Default sort order
+- `defaultThreadRateLimitPerUser: number` - Default slowmode for threads
+
+#### Methods
+
+##### setTags
+
+```typescript
+setTags(tags: APIGuildForumTag[], reason?: string): Promise<this>
+```
+
+Sets the available forum tags.
+
+**Example:**
+```typescript
+await forumChannel.setTags([
+  { id: '1', name: 'Question', emoji_name: '❓' },
+  { id: '2', name: 'Solved', emoji_name: '✅' }
+]);
+```
+
+##### setReactionEmoji
+
+```typescript
+setReactionEmoji(emoji: APIGuildForumDefaultReactionEmoji, reason?: string): Promise<this>
+```
+
+Sets the default reaction emoji.
+
+##### setSortOrder
+
+```typescript
+setSortOrder(sort: SortOrderType, reason?: string): Promise<this>
+```
+
+Sets the default sort order.
+
+##### setThreadRateLimit
+
+```typescript
+setThreadRateLimit(rate: number, reason?: string): Promise<this>
+```
+
+Sets the default slowmode for threads.
+
+##### thread
+
+```typescript
+thread(body: ThreadOnlyCreateBodyRequest, reason?: string): Promise<ThreadChannel>
+```
+
+Creates a new thread/post in the forum.
+
+**Example:**
+```typescript
+const post = await forumChannel.thread({
+  name: 'How do I...?',
+  message: {
+    content: 'I need help with...'
+  },
+  applied_tags: ['tag-id-1']
+});
+```
+
+### MediaChannel
+
+Represents a media channel (similar to forum but for media posts).
+
+```typescript
+class MediaChannel extends BaseGuildChannel
+```
+
+**Type:** `ChannelType.GuildMedia`
+
+Has the same methods as `ForumChannel`.
+
+## Other Channel Types
+
+### DMChannel
+
+Represents a DM channel.
+
+```typescript
+class DMChannel extends BaseNoEditableChannel<ChannelType.DM>
+```
+
+**Type:** `ChannelType.DM`
+
+Has message, pins, and reactions methods but cannot be edited.
+
+### CategoryChannel
+
+Represents a category channel.
+
+```typescript
+class CategoryChannel extends BaseGuildChannel
+```
+
+**Type:** `ChannelType.GuildCategory`
+
+Can contain other channels as children but has no special methods.
+
+### DirectoryChannel
+
+Represents a directory channel (for server discovery).
+
+```typescript
+class DirectoryChannel extends BaseChannel<ChannelType.GuildDirectory>
+```
+
+**Type:** `ChannelType.GuildDirectory`
+
+## Type Guards
+
+All channel classes include type guard methods:
+
+```typescript
+channel.isTextGuild(): channel is TextGuildChannel
+channel.isDM(): channel is DMChannel
+channel.isVoice(): channel is VoiceChannel
+channel.isStage(): channel is StageChannel
+channel.isThread(): channel is ThreadChannel
+channel.isForum(): channel is ForumChannel
+channel.isMedia(): channel is MediaChannel
+channel.isCategory(): channel is CategoryChannel
+channel.isNews(): channel is NewsChannel
+channel.isDirectory(): channel is DirectoryChannel
+channel.isTextable(): channel is AllTextableChannels
+channel.isGuildTextable(): channel is AllGuildTextableChannels
+channel.isThreadOnly(): channel is ForumChannel | MediaChannel
+```
+
+**Example:**
+```typescript
+if (channel.isTextGuild()) {
+  await channel.messages.write({ content: 'Hello!' });
+}
+
+if (channel.isVoice()) {
+  await channel.setBitrate(128000);
+}
+```
+
+## Related Types
+
+```typescript
+type AllChannels = 
+  | BaseChannel
+  | BaseGuildChannel
+  | TextGuildChannel
+  | DMChannel
+  | VoiceChannel
+  | StageChannel
+  | MediaChannel
+  | ForumChannel
+  | ThreadChannel
+  | CategoryChannel
+  | NewsChannel
+  | DirectoryChannel;
+
+type AllTextableChannels =
+  | TextGuildChannel
+  | VoiceChannel
+  | DMChannel
+  | NewsChannel
+  | ThreadChannel;
+
+type AllGuildTextableChannels =
+  | TextGuildChannel
+  | VoiceChannel
+  | NewsChannel
+  | ThreadChannel;
+```

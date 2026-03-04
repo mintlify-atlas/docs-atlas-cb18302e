@@ -1,0 +1,509 @@
+---
+title: 'ContextMenuCommand'
+description: 'Context menu commands for user and message interactions'
+---
+
+## Overview
+
+`ContextMenuCommand` is the base class for creating context menu commands in Discord. These are commands that appear in the right-click menu on users or messages.
+
+## Class Signature
+
+```typescript
+export abstract class ContextMenuCommand {
+  middlewares: (keyof RegisteredMiddlewares)[] = [];
+  name!: string;
+  type!: ApplicationCommandType.User | ApplicationCommandType.Message;
+  nsfw?: boolean;
+  integrationTypes: ApplicationIntegrationType[] = [];
+  contexts: InteractionContextType[] = [];
+  description!: string;
+  defaultMemberPermissions?: bigint;
+  botPermissions?: bigint;
+  dm?: boolean;
+  name_localizations?: Partial<Record<LocaleString, string>>;
+  description_localizations?: Partial<Record<LocaleString, string>>;
+  props: ExtraProps = {};
+  
+  abstract run?(context: MenuCommandContext<any>): any;
+}
+```
+
+## Properties
+
+<ParamField path="name" type="string" required>
+  The name of the context menu command as it appears in Discord.
+</ParamField>
+
+<ParamField path="type" type="ApplicationCommandType.User | ApplicationCommandType.Message" required>
+  The type of context menu command:
+  - `ApplicationCommandType.User`: Appears on user profiles
+  - `ApplicationCommandType.Message`: Appears on messages
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Description of the command (required by Discord API but not shown in UI).
+</ParamField>
+
+<ParamField path="middlewares" type="(keyof RegisteredMiddlewares)[]" default="[]">
+  Array of middleware names to run before command execution.
+</ParamField>
+
+<ParamField path="guildId" type="string[]">
+  Optional array of guild IDs where this command should be registered. If not specified, the command is registered globally.
+</ParamField>
+
+<ParamField path="nsfw" type="boolean">
+  Whether this command is age-restricted (NSFW).
+</ParamField>
+
+<ParamField path="defaultMemberPermissions" type="bigint">
+  The default permissions a user needs to use this command.
+</ParamField>
+
+<ParamField path="botPermissions" type="bigint">
+  The permissions the bot needs to execute this command.
+</ParamField>
+
+<ParamField path="dm" type="boolean">
+  Whether this command can be used in DMs (deprecated, use `contexts` instead).
+</ParamField>
+
+<ParamField path="integrationTypes" type="ApplicationIntegrationType[]" default="[]">
+  Where this command can be installed and used (guild, user app).
+</ParamField>
+
+<ParamField path="contexts" type="InteractionContextType[]" default="[]">
+  The contexts where this command can be used (guild, bot DM, private channel).
+</ParamField>
+
+<ParamField path="name_localizations" type="Partial<Record<LocaleString, string>>">
+  Localized names for the command in different languages.
+</ParamField>
+
+<ParamField path="description_localizations" type="Partial<Record<LocaleString, string>>">
+  Localized descriptions for the command.
+</ParamField>
+
+<ParamField path="props" type="ExtraProps" default="{}">
+  Custom properties that can be attached to the command.
+</ParamField>
+
+## Methods
+
+### run
+
+```typescript
+abstract run?(context: MenuCommandContext<any>): any
+```
+
+The main execution method for the context menu command. Must be implemented.
+
+<ParamField path="context" type="MenuCommandContext">
+  The menu command context containing interaction data and the target (user or message).
+</ParamField>
+
+### onBeforeMiddlewares
+
+```typescript
+onBeforeMiddlewares?(context: MenuCommandContext<any>): any
+```
+
+Hook that runs before middlewares are executed.
+
+### onAfterRun
+
+```typescript
+onAfterRun?(context: MenuCommandContext<any>, error: unknown | undefined): any
+```
+
+Hook that runs after command execution completes.
+
+### onRunError
+
+```typescript
+onRunError?(context: MenuCommandContext<any, never>, error: unknown): any
+```
+
+Error handler called when the `run` method throws an error.
+
+### onMiddlewaresError
+
+```typescript
+onMiddlewaresError?(context: MenuCommandContext<any, never>, error: string): any
+```
+
+Error handler called when a middleware stops execution with an error.
+
+### onBotPermissionsFail
+
+```typescript
+onBotPermissionsFail?(context: MenuCommandContext<any, never>, permissions: PermissionStrings): any
+```
+
+Called when the bot lacks required permissions.
+
+### onInternalError
+
+```typescript
+onInternalError?(client: UsingClient, command: ContextMenuCommand, error?: unknown): any
+```
+
+Called when an internal error occurs in the command handling system.
+
+### toJSON
+
+```typescript
+toJSON(): object
+```
+
+Serializes the command to Discord's API format for registration.
+
+### reload
+
+```typescript
+async reload(): Promise<void>
+```
+
+Reloads the command from its file path.
+
+## MenuCommandContext
+
+The context object passed to menu command handlers.
+
+### Class Signature
+
+```typescript
+export class MenuCommandContext<
+  T extends MessageCommandInteraction | UserCommandInteraction,
+  M extends keyof RegisteredMiddlewares = never,
+> extends BaseContext
+```
+
+### Properties
+
+<ParamField path="client" type="UsingClient" required>
+  The Seyfert client instance.
+</ParamField>
+
+<ParamField path="interaction" type="MessageCommandInteraction | UserCommandInteraction" required>
+  The interaction object for this context menu command.
+</ParamField>
+
+<ParamField path="shardId" type="number">
+  The ID of the shard that received this interaction.
+</ParamField>
+
+<ParamField path="command" type="ContextMenuCommand">
+  The command instance being executed.
+</ParamField>
+
+<ParamField path="metadata" type="CommandMetadata<UnionToTuple<M>>">
+  Data passed from middlewares.
+</ParamField>
+
+<ParamField path="globalMetadata" type="GlobalMetadata">
+  Data passed from global middlewares.
+</ParamField>
+
+### Getters
+
+<ParamField path="target" type="InteractionTarget<T>">
+  The target of the context menu action:
+  - For `MessageCommandInteraction`: Returns `MessageStructure`
+  - For `UserCommandInteraction`: Returns `UserStructure`
+</ParamField>
+
+<ParamField path="t" type="function">
+  Localization function for the user's locale.
+</ParamField>
+
+<ParamField path="fullCommandName" type="string">
+  The command name.
+</ParamField>
+
+<ParamField path="deferred" type="boolean">
+  Whether the interaction has been deferred.
+</ParamField>
+
+<ParamField path="guildId" type="string | undefined">
+  The ID of the guild where the command was invoked.
+</ParamField>
+
+<ParamField path="channelId" type="string">
+  The ID of the channel where the command was invoked.
+</ParamField>
+
+<ParamField path="author" type="UserStructure">
+  The user who invoked the command.
+</ParamField>
+
+<ParamField path="member" type="InteractionGuildMemberStructure | undefined">
+  The guild member who invoked the command.
+</ParamField>
+
+### Response Methods
+
+#### write
+
+```typescript
+async write<WR extends boolean = false>(
+  body: InteractionCreateBodyRequest,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure, void>>
+```
+
+Sends an initial response to the interaction.
+
+#### modal
+
+```typescript
+modal(body: ModalCreateBodyRequest, options?: undefined): Promise<undefined>
+modal(body: ModalCreateBodyRequest, options: ModalCreateOptions): Promise<ModalSubmitInteraction | null>
+```
+
+Shows a modal dialog to the user. Can optionally wait for the modal submission.
+
+**Example:**
+```typescript
+const submission = await ctx.modal({
+  title: 'Edit Message',
+  customId: 'edit-modal',
+  components: [/* ... */],
+}, { time: 5 * 60 * 1000 }); // Wait up to 5 minutes
+
+if (submission) {
+  // Handle modal submission
+}
+```
+
+#### deferReply
+
+```typescript
+async deferReply<WR extends boolean = false>(
+  ephemeral?: boolean,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure, undefined>>
+```
+
+Defers the interaction response.
+
+#### editResponse
+
+```typescript
+async editResponse(
+  body: InteractionMessageUpdateBodyRequest,
+): Promise<WebhookMessageStructure>
+```
+
+Edits the initial response or deferred reply.
+
+#### deleteResponse
+
+```typescript
+deleteResponse(): Promise<void>
+```
+
+Deletes the initial response.
+
+#### editOrReply
+
+```typescript
+async editOrReply<WR extends boolean = false>(
+  body: InteractionCreateBodyRequest | InteractionMessageUpdateBodyRequest,
+  withResponse?: WR,
+): Promise<When<WR, WebhookMessageStructure, void>>
+```
+
+Edits the response if one exists, otherwise creates a new response.
+
+#### followup
+
+```typescript
+async followup(
+  body: MessageWebhookCreateBodyRequest,
+): Promise<WebhookMessageStructure>
+```
+
+Sends a followup message.
+
+#### fetchResponse
+
+```typescript
+async fetchResponse(): Promise<WebhookMessageStructure>
+```
+
+Fetches the initial response from Discord's API.
+
+### Fetch Methods
+
+#### channel
+
+```typescript
+channel(mode?: 'rest' | 'flow'): Promise<AllChannels>
+channel(mode: 'cache'): ReturnCache<AllChannels>
+```
+
+Fetches the channel where the command was invoked.
+
+#### guild
+
+```typescript
+guild(mode?: 'rest' | 'flow', query?: RESTGetAPIGuildQuery): Promise<GuildStructure | undefined>
+guild(mode: 'cache', query?: RESTGetAPIGuildQuery): ReturnCache<GuildStructure | undefined>
+```
+
+Fetches the guild where the command was invoked.
+
+#### me
+
+```typescript
+me(mode?: 'rest' | 'flow'): Promise<GuildMemberStructure | undefined>
+me(mode: 'cache'): ReturnCache<GuildMemberStructure | undefined>
+```
+
+Fetches the bot's guild member object.
+
+### Type Guards
+
+#### isMenu
+
+```typescript
+isMenu(): this is MenuCommandContext<UserCommandInteraction | MessageCommandInteraction>
+```
+
+Always returns `true` for MenuCommandContext.
+
+#### isMenuUser
+
+```typescript
+isMenuUser(): this is MenuCommandContext<UserCommandInteraction>
+```
+
+Returns `true` if this is a user context menu command.
+
+#### isMenuMessage
+
+```typescript
+isMenuMessage(): this is MenuCommandContext<MessageCommandInteraction>
+```
+
+Returns `true` if this is a message context menu command.
+
+#### inGuild
+
+```typescript
+inGuild(): this is GuildMenuCommandContext<T, M>
+```
+
+Returns `true` if invoked in a guild. Narrows type to `GuildMenuCommandContext`.
+
+## Examples
+
+### User Context Menu Command
+
+```typescript
+import { ContextMenuCommand, Declare, type MenuCommandContext } from 'seyfert';
+import { ApplicationCommandType } from 'seyfert/lib/types';
+
+@Declare({
+  name: 'User Info',
+  type: ApplicationCommandType.User,
+})
+export default class UserInfoCommand extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<UserCommandInteraction>) {
+    // ctx.target is typed as UserStructure
+    const user = ctx.target;
+    
+    await ctx.write({
+      embeds: [{
+        title: 'User Information',
+        fields: [
+          { name: 'Username', value: user.username },
+          { name: 'ID', value: user.id },
+          { name: 'Created', value: user.createdAt.toDateString() },
+        ],
+      }],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
+```
+
+### Message Context Menu Command
+
+```typescript
+import { ContextMenuCommand, Declare, type MenuCommandContext } from 'seyfert';
+import { ApplicationCommandType, MessageCommandInteraction } from 'seyfert/lib/types';
+
+@Declare({
+  name: 'Copy Message',
+  type: ApplicationCommandType.Message,
+})
+export default class CopyMessageCommand extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<MessageCommandInteraction>) {
+    // ctx.target is typed as MessageStructure
+    const message = ctx.target;
+    
+    if (!message.content) {
+      return ctx.write({
+        content: 'This message has no text content.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    
+    await ctx.write({
+      content: `**Message from ${message.author.username}:**\n${message.content}`,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
+```
+
+### With Modal Response
+
+```typescript
+import { ContextMenuCommand, Declare, type MenuCommandContext } from 'seyfert';
+import { ApplicationCommandType, MessageCommandInteraction } from 'seyfert/lib/types';
+import { ActionRow, TextInput, TextInputStyle } from 'seyfert/lib/builders';
+
+@Declare({
+  name: 'Report Message',
+  type: ApplicationCommandType.Message,
+})
+export default class ReportMessageCommand extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<MessageCommandInteraction>) {
+    const message = ctx.target;
+    
+    const modal = await ctx.modal({
+      title: 'Report Message',
+      customId: 'report-modal',
+      components: [
+        new ActionRow().setComponents([
+          new TextInput()
+            .setCustomId('reason')
+            .setLabel('Reason for report')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true),
+        ]),
+      ],
+    }, { time: 5 * 60 * 1000 });
+    
+    if (modal) {
+      const reason = modal.fields.getTextInputValue('reason');
+      // Process report...
+      
+      await modal.write({
+        content: 'Thank you for your report.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  }
+}
+```
+
+## See Also
+
+- [Command](/api/commands/command) - Chat input commands
+- [CommandContext](/api/commands/command-context) - Context for slash commands
+- [EntryPointCommand](/api/commands/entry-point) - Entry point commands

@@ -1,0 +1,358 @@
+---
+title: HttpClient
+description: Lightweight client for HTTP-only Discord interactions without WebSocket gateway
+---
+
+## HttpClient
+
+The `HttpClient` class extends `BaseClient` and provides a lightweight client for handling Discord interactions via HTTP only, without establishing a WebSocket gateway connection. This is ideal for serverless environments, edge functions, or applications that only need to respond to interactions.
+
+### Constructor
+
+```typescript
+new HttpClient(options?: BaseClientOptions)
+```
+
+<ParamField path="options" type="BaseClientOptions">
+  Optional configuration for the HTTP client
+</ParamField>
+
+### Properties
+
+Inherits all properties from `BaseClient`:
+
+- `rest` - REST API handler
+- `cache` - Cache manager
+- `commands` - Command handler
+- `components` - Component handler
+- `langs` - Language handler
+- `logger` - Logger instance
+- All resource shorters (users, guilds, channels, etc.)
+
+### Methods
+
+#### start()
+
+Starts the HTTP client by loading commands, components, and languages.
+
+```typescript
+await httpClient.start(options?: {
+  langsDir?: string;
+  commandsDir?: string;
+  componentsDir?: string;
+  token?: string;
+  httpConnection?: {
+    publicKey: string;
+    port?: number;
+  };
+}): Promise<void>
+```
+
+<ParamField path="options.langsDir" type="string">
+  Directory containing language files
+</ParamField>
+
+<ParamField path="options.commandsDir" type="string">
+  Directory containing command files
+</ParamField>
+
+<ParamField path="options.componentsDir" type="string">
+  Directory containing component files
+</ParamField>
+
+<ParamField path="options.token" type="string">
+  Discord bot token
+</ParamField>
+
+<ParamField path="options.httpConnection" type="object">
+  HTTP connection configuration
+  - `publicKey`: Your application's public key from Discord Developer Portal
+  - `port`: Port to listen on (optional)
+</ParamField>
+
+## Examples
+
+### Basic HTTP Client
+
+```typescript
+import { HttpClient } from 'seyfert';
+
+const client = new HttpClient();
+
+await client.start({
+  token: process.env.BOT_TOKEN,
+  httpConnection: {
+    publicKey: process.env.PUBLIC_KEY,
+    port: 3000,
+  },
+});
+```
+
+### With Express.js
+
+```typescript
+import { HttpClient } from 'seyfert';
+import express from 'express';
+import { verifyKey } from 'discord-interactions';
+
+const app = express();
+const client = new HttpClient();
+
+await client.start({
+  commandsDir: './src/commands',
+  componentsDir: './src/components',
+});
+
+app.post('/interactions', express.json(), async (req, res) => {
+  const signature = req.headers['x-signature-ed25519'] as string;
+  const timestamp = req.headers['x-signature-timestamp'] as string;
+  const rawBody = JSON.stringify(req.body);
+
+  const isValid = verifyKey(
+    rawBody,
+    signature,
+    timestamp,
+    process.env.PUBLIC_KEY!
+  );
+
+  if (!isValid) {
+    return res.status(401).send('Invalid signature');
+  }
+
+  const { headers, response } = await client.onInteractionRequest(req.body);
+
+  if (response instanceof FormData) {
+    // Handle multipart/form-data for file uploads
+    res.setHeader('Content-Type', 'multipart/form-data');
+    res.send(response);
+  } else {
+    res.setHeader('Content-Type', 'application/json');
+    res.json(response);
+  }
+});
+
+app.listen(3000, () => {
+  console.log('HTTP client listening on port 3000');
+});
+```
+
+### With Cloudflare Workers
+
+```typescript
+import { HttpClient } from 'seyfert';
+
+const client = new HttpClient();
+
+await client.start();
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    if (request.method !== 'POST') {
+      return new Response('Method not allowed', { status: 405 });
+    }
+
+    const signature = request.headers.get('x-signature-ed25519');
+    const timestamp = request.headers.get('x-signature-timestamp');
+    const body = await request.text();
+
+    // Verify the request signature
+    const isValid = await verifyKey(
+      body,
+      signature!,
+      timestamp!,
+      env.PUBLIC_KEY
+    );
+
+    if (!isValid) {
+      return new Response('Invalid signature', { status: 401 });
+    }
+
+    const interaction = JSON.parse(body);
+    const { headers, response } = await client.onInteractionRequest(interaction);
+
+    if (response instanceof FormData) {
+      return new Response(response);
+    }
+
+    return new Response(JSON.stringify(response), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  },
+};
+```
+
+### With AWS Lambda
+
+```typescript
+import { HttpClient } from 'seyfert';
+import { APIGatewayProxyHandler } from 'aws-lambda';
+import { verifyKey } from 'discord-interactions';
+
+const client = new HttpClient();
+await client.start();
+
+export const handler: APIGatewayProxyHandler = async (event) => {
+  const signature = event.headers['x-signature-ed25519']!;
+  const timestamp = event.headers['x-signature-timestamp']!;
+  const body = event.body!;
+
+  const isValid = verifyKey(
+    body,
+    signature,
+    timestamp,
+    process.env.PUBLIC_KEY!
+  );
+
+  if (!isValid) {
+    return {
+      statusCode: 401,
+      body: 'Invalid signature',
+    };
+  }
+
+  const interaction = JSON.parse(body);
+  const { headers, response } = await client.onInteractionRequest(interaction);
+
+  if (response instanceof FormData) {
+    // Convert FormData to base64 for Lambda
+    const buffer = await response.arrayBuffer();
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'multipart/form-data' },
+      body: Buffer.from(buffer).toString('base64'),
+      isBase64Encoded: true,
+    };
+  }
+
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(response),
+  };
+};
+```
+
+### With Bun HTTP Server
+
+```typescript
+import { HttpClient } from 'seyfert';
+import { verifyKey } from 'discord-interactions';
+
+const client = new HttpClient();
+await client.start();
+
+Bun.serve({
+  port: 3000,
+  async fetch(req) {
+    if (req.method !== 'POST') {
+      return new Response('Method not allowed', { status: 405 });
+    }
+
+    const signature = req.headers.get('x-signature-ed25519')!;
+    const timestamp = req.headers.get('x-signature-timestamp')!;
+    const body = await req.text();
+
+    const isValid = verifyKey(
+      body,
+      signature,
+      timestamp,
+      process.env.PUBLIC_KEY!
+    );
+
+    if (!isValid) {
+      return new Response('Invalid signature', { status: 401 });
+    }
+
+    const interaction = JSON.parse(body);
+    const { headers, response } = await client.onInteractionRequest(interaction);
+
+    if (response instanceof FormData) {
+      return new Response(response);
+    }
+
+    return Response.json(response);
+  },
+});
+
+console.log('HTTP client listening on port 3000');
+```
+
+### Custom Error Handling
+
+```typescript
+import { HttpClient } from 'seyfert';
+
+const client = new HttpClient({
+  commands: {
+    defaults: {
+      onRunError: async (context, error) => {
+        console.error('Command error:', error);
+        return context.write({
+          content: 'An error occurred while running this command.',
+        });
+      },
+      onPermissionsFail: async (context, permissions) => {
+        return context.write({
+          content: `You need the following permissions: ${permissions.join(', ')}`,
+        });
+      },
+    },
+  },
+});
+
+await client.start();
+```
+
+### Upload Commands
+
+```typescript
+import { HttpClient } from 'seyfert';
+
+const client = new HttpClient();
+
+await client.start();
+
+// Upload commands to Discord
+await client.uploadCommands({
+  applicationId: process.env.APPLICATION_ID,
+});
+
+console.log('Commands uploaded successfully');
+```
+
+## Use Cases
+
+### Serverless Environments
+
+HttpClient is perfect for serverless platforms like:
+- AWS Lambda
+- Cloudflare Workers
+- Vercel Edge Functions
+- Netlify Functions
+- Google Cloud Functions
+
+### Cost Optimization
+
+For bots that primarily respond to slash commands and don't need real-time events, HttpClient eliminates the need for:
+- Always-on servers
+- WebSocket connections
+- Constant memory usage
+
+### Hybrid Architectures
+
+Combine HttpClient with Worker/Client for:
+- Handling interactions on edge while events are processed centrally
+- Geographic distribution of interaction handlers
+- Fallback mechanisms
+
+## Limitations
+
+<Warning>
+HttpClient cannot:
+- Receive gateway events (MESSAGE_CREATE, GUILD_MEMBER_ADD, etc.)
+- Use collectors for messages or reactions
+- Access real-time presence or voice state data
+- Cache data from gateway events
+
+For these features, use `Client` or `WorkerClient` instead.
+</Warning>

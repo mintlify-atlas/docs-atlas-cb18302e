@@ -1,0 +1,524 @@
+---
+title: "Middleware"
+description: "Control and enhance command execution flow with middleware"
+---
+
+## Overview
+
+Middleware in Seyfert allows you to execute code before your commands run. Use middleware for authentication, logging, rate limiting, data validation, and more. Middleware can stop command execution or pass data to your command handlers.
+
+## Middleware Concept
+
+Middleware functions intercept command execution and can:
+- ✅ Allow execution to continue with `next()`
+- 🛑 Stop execution with `stop(error)`
+- ⏭️ Skip remaining middleware with `pass()`
+- 📦 Pass data to the command with `next(data)`
+
+## Creating Middleware
+
+### Basic Middleware
+
+Create middleware using the `createMiddleware` function:
+
+```typescript
+import { createMiddleware } from 'seyfert';
+import type { CommandContext } from 'seyfert';
+
+export const LogCommand = createMiddleware<void>(({ context, next }) => {
+  console.log(`Command executed: ${context.command.name} by ${context.author.username}`);
+  next();
+});
+```
+
+### Middleware with Data
+
+Pass data from middleware to your command:
+
+```typescript
+import { createMiddleware } from 'seyfert';
+
+interface UserData {
+  isPremium: boolean;
+  credits: number;
+}
+
+export const FetchUserData = createMiddleware<UserData>(async ({ context, next, stop }) => {
+  try {
+    const userData = await database.users.findOne({ id: context.author.id });
+    
+    if (!userData) {
+      return stop('User not found in database');
+    }
+    
+    next({
+      isPremium: userData.premium,
+      credits: userData.credits
+    });
+  } catch (error) {
+    stop('Database error');
+  }
+});
+```
+
+### Stopping Execution
+
+```typescript
+import { createMiddleware } from 'seyfert';
+
+export const AdminOnly = createMiddleware<void>(({ context, next, stop }) => {
+  const adminIds = ['123456789012345678', '987654321098765432'];
+  
+  if (!adminIds.includes(context.author.id)) {
+    return stop('This command is only available to administrators');
+  }
+  
+  next();
+});
+```
+
+### Bypassing Remaining Middleware
+
+```typescript
+import { createMiddleware } from 'seyfert';
+
+export const OwnerBypass = createMiddleware<void>(({ context, next, pass }) => {
+  const ownerId = '123456789012345678';
+  
+  if (context.author.id === ownerId) {
+    // Skip all remaining middleware and go straight to command
+    return pass();
+  }
+  
+  next();
+});
+```
+
+## Registering Middleware
+
+Register middleware globally in your client setup:
+
+```typescript
+import { Client } from 'seyfert';
+import { LogCommand, AdminOnly, FetchUserData, RateLimiter } from './middleware';
+
+// Extend the RegisteredMiddlewares interface
+declare module 'seyfert' {
+  interface RegisteredMiddlewares {
+    LogCommand: typeof LogCommand;
+    AdminOnly: typeof AdminOnly;
+    FetchUserData: typeof FetchUserData;
+    RateLimiter: typeof RateLimiter;
+  }
+}
+
+const client = new Client();
+
+client.setServices({
+  middlewares: {
+    LogCommand,
+    AdminOnly,
+    FetchUserData,
+    RateLimiter
+  }
+});
+```
+
+<Note>
+  You must extend `RegisteredMiddlewares` to get type safety when using middleware names in decorators.
+</Note>
+
+## Using Middleware in Commands
+
+Attach middleware to commands using the `@Middlewares` decorator:
+
+```typescript
+import { Command, Declare, Middlewares } from 'seyfert';
+
+@Declare({
+  name: 'premium',
+  description: 'Premium only command'
+})
+@Middlewares(['FetchUserData'])
+export default class PremiumCommand extends Command {
+  async run(ctx: CommandContext<{}, 'FetchUserData'>) {
+    // Access middleware data through metadata
+    const userData = ctx.metadata.FetchUserData;
+    
+    if (!userData.isPremium) {
+      return ctx.write({ content: 'This command requires premium!' });
+    }
+    
+    await ctx.write({ 
+      content: `Premium feature activated! Credits: ${userData.credits}` 
+    });
+  }
+}
+```
+
+### Multiple Middleware
+
+```typescript
+@Middlewares(['LogCommand', 'RateLimiter', 'FetchUserData'])
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<{}, 'LogCommand' | 'RateLimiter' | 'FetchUserData'>) {
+    const userData = ctx.metadata.FetchUserData;
+    // Implementation
+  }
+}
+```
+
+## Global Middleware
+
+Apply middleware to all commands:
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client({
+  globalMiddlewares: ['LogCommand', 'RateLimiter']
+});
+
+await client.start();
+```
+
+Global middleware runs before command-specific middleware.
+
+## Execution Order
+
+Middleware executes in this order:
+
+1. Global middleware (in order defined)
+2. Command-specific middleware (in order defined)
+3. Command's `onBeforeMiddlewares` hook
+4. Command's `run` method
+
+```typescript
+// Client setup
+new Client({
+  globalMiddlewares: ['LogCommand', 'RateLimiter']
+});
+
+// Command
+@Middlewares(['AdminOnly', 'FetchUserData'])
+export default class MyCommand extends Command {
+  async onBeforeMiddlewares(ctx: CommandContext) {
+    console.log('3. Before middlewares hook');
+  }
+  
+  async run(ctx: CommandContext) {
+    console.log('4. Command execution');
+  }
+}
+
+// Execution order:
+// 1. LogCommand (global)
+// 2. RateLimiter (global)
+// 3. AdminOnly (command)
+// 4. FetchUserData (command)
+// 5. onBeforeMiddlewares
+// 6. run
+```
+
+## Practical Examples
+
+### Rate Limiter
+
+```typescript
+import { createMiddleware } from 'seyfert';
+
+const cooldowns = new Map<string, number>();
+
+export const RateLimiter = createMiddleware<void>(({ context, next, stop }) => {
+  const key = `${context.author.id}-${context.command.name}`;
+  const now = Date.now();
+  const cooldownAmount = 5000; // 5 seconds
+  
+  if (cooldowns.has(key)) {
+    const expirationTime = cooldowns.get(key)! + cooldownAmount;
+    
+    if (now < expirationTime) {
+      const timeLeft = ((expirationTime - now) / 1000).toFixed(1);
+      return stop(`Please wait ${timeLeft} seconds before using this command again`);
+    }
+  }
+  
+  cooldowns.set(key, now);
+  setTimeout(() => cooldowns.delete(key), cooldownAmount);
+  
+  next();
+});
+```
+
+### Guild Only
+
+```typescript
+import { createMiddleware } from 'seyfert';
+
+export const GuildOnly = createMiddleware<void>(({ context, next, stop }) => {
+  if (!context.guildId) {
+    return stop('This command can only be used in servers');
+  }
+  
+  next();
+});
+```
+
+### Permission Check
+
+```typescript
+import { createMiddleware } from 'seyfert';
+import { PermissionsBitField } from 'seyfert';
+
+export const RequirePermissions = (permissions: bigint) => 
+  createMiddleware<void>(({ context, next, stop }) => {
+    if (!context.member) {
+      return stop('This command can only be used in servers');
+    }
+    
+    const memberPerms = new PermissionsBitField(context.member.permissions);
+    
+    if (!memberPerms.has(permissions)) {
+      return stop('You don\'t have permission to use this command');
+    }
+    
+    next();
+  });
+```
+
+### Database Middleware
+
+```typescript
+import { createMiddleware } from 'seyfert';
+import { database } from '../database';
+
+interface GuildSettings {
+  prefix: string;
+  language: string;
+  features: string[];
+}
+
+export const LoadGuildSettings = createMiddleware<GuildSettings>(async ({ context, next, stop }) => {
+  if (!context.guildId) {
+    return stop('This command requires guild settings');
+  }
+  
+  try {
+    const settings = await database.guilds.findOne({ id: context.guildId });
+    
+    if (!settings) {
+      // Create default settings
+      const defaults = {
+        prefix: '!',
+        language: 'en',
+        features: []
+      };
+      await database.guilds.create({ id: context.guildId, ...defaults });
+      return next(defaults);
+    }
+    
+    next(settings);
+  } catch (error) {
+    console.error('Database error:', error);
+    stop('Failed to load guild settings');
+  }
+});
+```
+
+### Maintenance Mode
+
+```typescript
+import { createMiddleware } from 'seyfert';
+
+const maintenanceMode = false;
+const allowedUsers = ['123456789012345678'];
+
+export const MaintenanceCheck = createMiddleware<void>(({ context, next, stop }) => {
+  if (maintenanceMode && !allowedUsers.includes(context.author.id)) {
+    return stop('Bot is currently in maintenance mode. Please try again later.');
+  }
+  
+  next();
+});
+```
+
+## Accessing Middleware Data
+
+Access data passed from middleware in your command:
+
+```typescript
+@Middlewares(['FetchUserData', 'LoadGuildSettings'])
+export default class ConfigCommand extends Command {
+  async run(ctx: CommandContext<{}, 'FetchUserData' | 'LoadGuildSettings'>) {
+    // Type-safe access to middleware data
+    const userData = ctx.metadata.FetchUserData;
+    const guildSettings = ctx.metadata.LoadGuildSettings;
+    
+    await ctx.write({
+      content: `User: ${userData.isPremium ? 'Premium' : 'Free'}\nGuild prefix: ${guildSettings.prefix}`
+    });
+  }
+}
+```
+
+### Global Middleware Data
+
+Access global middleware data:
+
+```typescript
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Global middleware data is in globalMetadata
+    const logData = ctx.globalMetadata.LogCommand;
+    const rateLimitData = ctx.globalMetadata.RateLimiter;
+  }
+}
+```
+
+## Error Handling
+
+Handle middleware errors in your command:
+
+```typescript
+export default class MyCommand extends Command {
+  async onMiddlewaresError(ctx: CommandContext, error: string) {
+    // error is the string passed to stop()
+    await ctx.write({
+      content: `Middleware error: ${error}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+  
+  async run(ctx: CommandContext) {
+    // This won't run if middleware calls stop()
+  }
+}
+```
+
+## Middleware for Context Menus
+
+Middleware works with context menu commands too:
+
+```typescript
+import { ContextMenuCommand, Declare, Middlewares, ApplicationCommandType } from 'seyfert';
+
+@Declare({
+  name: 'User Info',
+  type: ApplicationCommandType.User
+})
+@Middlewares(['LogCommand', 'RateLimiter'])
+export default class UserInfoMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<UserCommandInteraction>) {
+    // Middleware runs before this
+  }
+}
+```
+
+## TypeScript Setup
+
+For full type safety, extend the interfaces:
+
+```typescript
+// types/middleware.ts
+import type {
+  LogCommand,
+  AdminOnly,
+  FetchUserData,
+  RateLimiter,
+  LoadGuildSettings
+} from '../middleware';
+
+declare module 'seyfert' {
+  interface RegisteredMiddlewares {
+    LogCommand: typeof LogCommand;
+    AdminOnly: typeof AdminOnly;
+    FetchUserData: typeof FetchUserData;
+    RateLimiter: typeof RateLimiter;
+    LoadGuildSettings: typeof LoadGuildSettings;
+  }
+}
+```
+
+Now you get autocomplete and type checking:
+
+```typescript
+@Middlewares(['FetchUserData']) // Autocomplete works
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<{}, 'FetchUserData'>) {
+    ctx.metadata.FetchUserData; // Fully typed
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep Middleware Focused">
+    Each middleware should do one thing well:
+    
+    ```typescript
+    // Good - single responsibility
+    export const LogCommand = createMiddleware(/* logging logic */);
+    export const CheckPermissions = createMiddleware(/* permission logic */);
+    
+    // Bad - doing too much
+    export const DoEverything = createMiddleware(/* logs, checks permissions, validates, etc */);
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Type Safety">
+    Always specify middleware types in commands:
+    
+    ```typescript
+    async run(ctx: CommandContext<{}, 'FetchUserData'>) {
+      // Fully typed access to middleware data
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Async Operations">
+    Use async/await for database queries and API calls:
+    
+    ```typescript
+    createMiddleware(async ({ context, next, stop }) => {
+      const data = await fetchData();
+      next(data);
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Provide Clear Error Messages">
+    When stopping execution, provide helpful messages:
+    
+    ```typescript
+    if (!hasPermission) {
+      return stop('You need Administrator permission to use this command');
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Clean Up Resources">
+    Clear timers, close connections, etc.:
+    
+    ```typescript
+    const timeout = setTimeout(() => cooldowns.delete(key), 5000);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat Commands" icon="comments" href="/commands/chat-commands">
+    Learn about command structure
+  </Card>
+  <Card title="Decorators" icon="at" href="/commands/decorators">
+    Explore command decorators
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors in middleware
+  </Card>
+  <Card title="Custom Context" icon="code" href="/advanced/custom-context">
+    Extend context with middleware data
+  </Card>
+</CardGroup>

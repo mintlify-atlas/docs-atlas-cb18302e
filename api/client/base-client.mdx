@@ -1,0 +1,369 @@
+---
+title: BaseClient
+description: The base client class that all Seyfert clients extend from
+---
+
+## BaseClient
+
+The `BaseClient` class is the foundation for all Seyfert client types. It provides core functionality for handling commands, components, caching, REST API calls, and more.
+
+### Constructor
+
+```typescript
+new BaseClient(options?: BaseClientOptions)
+```
+
+<ParamField path="options" type="BaseClientOptions">
+  Optional configuration for the base client
+</ParamField>
+
+### Properties
+
+<ParamField path="rest" type="ApiHandler">
+  REST API handler for making requests to Discord's API
+</ParamField>
+
+<ParamField path="cache" type="Cache">
+  Cache manager for storing Discord entities
+</ParamField>
+
+<ParamField path="applications" type="ApplicationShorter">
+  Helper methods for application-related operations
+</ParamField>
+
+<ParamField path="users" type="UsersShorter">
+  Helper methods for user-related operations
+</ParamField>
+
+<ParamField path="channels" type="ChannelShorter">
+  Helper methods for channel-related operations
+</ParamField>
+
+<ParamField path="guilds" type="GuildShorter">
+  Helper methods for guild-related operations
+</ParamField>
+
+<ParamField path="messages" type="MessageShorter">
+  Helper methods for message-related operations
+</ParamField>
+
+<ParamField path="members" type="MemberShorter">
+  Helper methods for member-related operations
+</ParamField>
+
+<ParamField path="webhooks" type="WebhookShorter">
+  Helper methods for webhook-related operations
+</ParamField>
+
+<ParamField path="roles" type="RoleShorter">
+  Helper methods for role-related operations
+</ParamField>
+
+<ParamField path="emojis" type="EmojiShorter">
+  Helper methods for emoji-related operations
+</ParamField>
+
+<ParamField path="threads" type="ThreadShorter">
+  Helper methods for thread-related operations
+</ParamField>
+
+<ParamField path="bans" type="BanShorter">
+  Helper methods for ban-related operations
+</ParamField>
+
+<ParamField path="interactions" type="InteractionShorter">
+  Helper methods for interaction-related operations
+</ParamField>
+
+<ParamField path="voiceStates" type="VoiceStateShorter">
+  Helper methods for voice state-related operations
+</ParamField>
+
+<ParamField path="soundboards" type="SoundboardShorter">
+  Helper methods for soundboard-related operations
+</ParamField>
+
+<ParamField path="invites" type="InvitesShorter">
+  Helper methods for invite-related operations
+</ParamField>
+
+<ParamField path="logger" type="Logger">
+  Logger instance for client logging
+</ParamField>
+
+<ParamField path="commands" type="CommandHandler">
+  Command handler for managing application commands
+</ParamField>
+
+<ParamField path="components" type="ComponentHandler">
+  Component handler for managing message components
+</ParamField>
+
+<ParamField path="langs" type="LangsHandler">
+  Localization handler for managing translations
+</ParamField>
+
+<ParamField path="handleCommand" type="HandleCommand">
+  Command execution handler
+</ParamField>
+
+<ParamField path="botId" type="string">
+  The bot's user ID (automatically extracted from token)
+</ParamField>
+
+<ParamField path="applicationId" type="string">
+  The application ID for the bot
+</ParamField>
+
+<ParamField path="proxy" type="Proxy">
+  REST API proxy for making Discord API calls
+</ParamField>
+
+### Methods
+
+#### start()
+
+Starts the client by loading languages, commands, and components.
+
+```typescript
+await client.start(options?: {
+  langsDir?: string;
+  commandsDir?: string;
+  componentsDir?: string;
+  token?: string;
+  connection?: any;
+}): Promise<void>
+```
+
+<ParamField path="options.langsDir" type="string">
+  Directory containing language files
+</ParamField>
+
+<ParamField path="options.commandsDir" type="string">
+  Directory containing command files
+</ParamField>
+
+<ParamField path="options.componentsDir" type="string">
+  Directory containing component files
+</ParamField>
+
+<ParamField path="options.token" type="string">
+  Discord bot token
+</ParamField>
+
+#### setServices()
+
+Configures services like REST API, cache, and middleware.
+
+```typescript
+client.setServices(options: ServicesOptions): void
+```
+
+<ParamField path="options.rest" type="ApiHandler">
+  Custom REST API handler
+</ParamField>
+
+<ParamField path="options.cache" type="object">
+  Cache configuration
+  - `adapter`: Custom cache adapter
+  - `disabledCache`: Disable specific cache types
+</ParamField>
+
+<ParamField path="options.langs" type="object">
+  Language configuration
+  - `default`: Default language
+  - `aliases`: Language aliases
+</ParamField>
+
+<ParamField path="options.middlewares" type="Record<string, MiddlewareContext>">
+  Custom middleware functions
+</ParamField>
+
+<ParamField path="options.handleCommand" type="typeof HandleCommand">
+  Custom command handler
+</ParamField>
+
+#### uploadCommands()
+
+Uploads application commands to Discord.
+
+```typescript
+await client.uploadCommands(options?: {
+  applicationId?: string;
+  cachePath?: string;
+}): Promise<void>
+```
+
+<ParamField path="options.applicationId" type="string">
+  Application ID (defaults to client's applicationId)
+</ParamField>
+
+<ParamField path="options.cachePath" type="string">
+  Path to cache file for detecting command changes
+</ParamField>
+
+#### loadCommands()
+
+Loads commands from a directory.
+
+```typescript
+await client.loadCommands(dir?: string): Promise<void>
+```
+
+<ParamField path="dir" type="string">
+  Directory containing command files (defaults to config)
+</ParamField>
+
+#### loadComponents()
+
+Loads components from a directory.
+
+```typescript
+await client.loadComponents(dir?: string): Promise<void>
+```
+
+<ParamField path="dir" type="string">
+  Directory containing component files (defaults to config)
+</ParamField>
+
+#### loadLangs()
+
+Loads language files from a directory.
+
+```typescript
+await client.loadLangs(dir?: string): Promise<void>
+```
+
+<ParamField path="dir" type="string">
+  Directory containing language files (defaults to config)
+</ParamField>
+
+#### t()
+
+Gets translations for a specific locale.
+
+```typescript
+client.t(locale: string): Translation
+```
+
+<ParamField path="locale" type="string">
+  Locale code (e.g., 'en-US', 'es-ES')
+</ParamField>
+
+#### onInteractionRequest()
+
+Handles incoming interaction requests (for HTTP-based interactions).
+
+```typescript
+await client.onInteractionRequest(rawBody: APIInteraction): Promise<{
+  headers: { 'Content-Type'?: string };
+  response: APIInteractionResponse | FormData;
+}>
+```
+
+<ParamField path="rawBody" type="APIInteraction">
+  Raw interaction payload from Discord
+</ParamField>
+
+#### getRC()
+
+Gets the runtime configuration from seyfert.config file.
+
+```typescript
+await client.getRC<T>(): Promise<T>
+```
+
+## BaseClientOptions
+
+Configuration options for BaseClient.
+
+```typescript
+interface BaseClientOptions {
+  context?: (interaction: Interaction | Message) => Record<string, unknown>;
+  globalMiddlewares?: readonly string[];
+  commands?: {
+    defaults?: {
+      onBeforeMiddlewares?: (context: CommandContext | MenuCommandContext) => unknown;
+      onBeforeOptions?: (context: CommandContext) => unknown;
+      onRunError?: (context: CommandContext, error: unknown) => unknown;
+      onPermissionsFail?: (context: CommandContext, permissions: PermissionStrings) => unknown;
+      onBotPermissionsFail?: (context: CommandContext, permissions: PermissionStrings) => unknown;
+      onInternalError?: (client: UsingClient, command: Command, error?: unknown) => unknown;
+      onMiddlewaresError?: (context: CommandContext, error: string) => unknown;
+      onOptionsError?: (context: CommandContext, metadata: any) => unknown;
+      onAfterRun?: (context: CommandContext, error: unknown) => unknown;
+      props?: ExtraProps;
+    };
+  };
+  components?: {
+    defaults?: {
+      onBeforeMiddlewares?: (context: ComponentContext) => unknown;
+      onRunError?: (context: ComponentContext, error: unknown) => unknown;
+      onInternalError?: (client: UsingClient, error: unknown) => unknown;
+      onMiddlewaresError?: (context: ComponentContext, error: string) => unknown;
+      onAfterRun?: (context: ComponentContext, error: unknown) => unknown;
+    };
+  };
+  modals?: {
+    defaults?: {
+      onBeforeMiddlewares?: (context: ModalContext) => unknown;
+      onRunError?: (context: ModalContext, error: unknown) => unknown;
+      onInternalError?: (client: UsingClient, error: unknown) => unknown;
+      onMiddlewaresError?: (context: ModalContext, error: string) => unknown;
+      onAfterRun?: (context: ModalContext, error: unknown) => unknown;
+    };
+  };
+  allowedMentions?: AllowedMentions;
+  getRC?(): Awaitable<InternalRuntimeConfig | InternalRuntimeConfigHTTP>;
+}
+```
+
+<ParamField path="context" type="function">
+  Function to provide custom context for interactions
+</ParamField>
+
+<ParamField path="globalMiddlewares" type="readonly string[]">
+  Array of middleware names to apply globally
+</ParamField>
+
+<ParamField path="commands.defaults" type="object">
+  Default handlers for command lifecycle events
+</ParamField>
+
+<ParamField path="components.defaults" type="object">
+  Default handlers for component lifecycle events
+</ParamField>
+
+<ParamField path="modals.defaults" type="object">
+  Default handlers for modal lifecycle events
+</ParamField>
+
+<ParamField path="allowedMentions" type="AllowedMentions">
+  Default allowed mentions configuration
+</ParamField>
+
+<ParamField path="getRC" type="function">
+  Custom function to retrieve runtime configuration
+</ParamField>
+
+## Example
+
+```typescript
+import { BaseClient } from 'seyfert';
+
+const client = new BaseClient({
+  commands: {
+    defaults: {
+      onRunError: (context, error) => {
+        console.error('Command error:', error);
+      },
+    },
+  },
+});
+
+await client.start({
+  token: process.env.BOT_TOKEN,
+});
+
+await client.uploadCommands();
+```

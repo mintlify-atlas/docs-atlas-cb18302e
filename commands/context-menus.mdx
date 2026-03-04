@@ -1,0 +1,391 @@
+---
+title: "Context Menu Commands"
+description: "Create right-click commands for users and messages"
+---
+
+## Overview
+
+Context menu commands appear when users right-click (or long-press on mobile) on users or messages in Discord. Seyfert provides the `ContextMenuCommand` class to create these interactive commands.
+
+## Types of Context Menus
+
+Discord supports two types of context menu commands:
+
+- **User Commands**: Appear in the user context menu (right-click on a user)
+- **Message Commands**: Appear in the message context menu (right-click on a message)
+
+## Creating a User Command
+
+User commands let you perform actions on a specific user:
+
+```typescript
+import { ContextMenuCommand, Declare, ApplicationCommandType } from 'seyfert';
+import type { MenuCommandContext, UserCommandInteraction } from 'seyfert';
+
+@Declare({
+  name: 'User Info',
+  type: ApplicationCommandType.User
+})
+export default class UserInfoMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<UserCommandInteraction>) {
+    const targetUser = ctx.target;
+    
+    await ctx.write({
+      content: `User: ${targetUser.username}\nID: ${targetUser.id}\nCreated: ${targetUser.createdAt}`
+    });
+  }
+}
+```
+
+<Note>
+  Context menu command names are displayed in Discord's UI, so use clear, descriptive names with proper capitalization.
+</Note>
+
+## Creating a Message Command
+
+Message commands let you perform actions on a specific message:
+
+```typescript
+import { ContextMenuCommand, Declare, ApplicationCommandType } from 'seyfert';
+import type { MenuCommandContext, MessageCommandInteraction } from 'seyfert';
+
+@Declare({
+  name: 'Report Message',
+  type: ApplicationCommandType.Message
+})
+export default class ReportMessageMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<MessageCommandInteraction>) {
+    const targetMessage = ctx.target;
+    
+    // Log the report
+    console.log(`Message ${targetMessage.id} reported by ${ctx.author.id}`);
+    
+    await ctx.write({
+      content: 'Thank you for your report. Our moderation team will review it.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Command Properties
+
+Context menu commands support the following properties in the `@Declare` decorator:
+
+```typescript
+@Declare({
+  name: 'Timeout User',
+  type: ApplicationCommandType.User,
+  defaultMemberPermissions: 'ModerateMembers',
+  botPermissions: 'ModerateMembers',
+  nsfw: false,
+  guildId: ['123456789012345678'], // Optional: restrict to specific guilds
+  integrationTypes: ['GuildInstall'],
+  contexts: ['Guild']
+})
+export default class TimeoutUserMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<UserCommandInteraction>) {
+    // Timeout logic
+  }
+}
+```
+
+### Available Properties
+
+- **name** (required): The display name in Discord's context menu
+- **type** (required): `ApplicationCommandType.User` or `ApplicationCommandType.Message`
+- **defaultMemberPermissions**: Permissions required to use the command
+- **botPermissions**: Permissions your bot needs to execute the command
+- **nsfw**: Whether the command is age-restricted
+- **guildId**: Array of guild IDs where this command is available
+- **integrationTypes**: Where the command can be installed
+- **contexts**: Where the command can be used
+
+## MenuCommandContext
+
+The context object provides access to the target and interaction details:
+
+```typescript
+async run(ctx: MenuCommandContext<UserCommandInteraction>) {
+  // The targeted user or message
+  const target = ctx.target;
+  
+  // The user who invoked the command
+  const invoker = ctx.author;
+  
+  // Guild and channel information
+  const guild = await ctx.guild();
+  const channel = await ctx.channel();
+  
+  // Respond to the interaction
+  await ctx.write({ content: 'Response' });
+  
+  // Send ephemeral response
+  await ctx.write({ 
+    content: 'Only you can see this',
+    flags: MessageFlags.Ephemeral 
+  });
+  
+  // Defer for long operations
+  await ctx.deferReply();
+  
+  // Edit the response
+  await ctx.editResponse({ content: 'Updated!' });
+  
+  // Check context type
+  if (ctx.isMenuUser()) {
+    // Handle user command
+  }
+  if (ctx.isMenuMessage()) {
+    // Handle message command
+  }
+}
+```
+
+## Type Guards
+
+Use type guards to narrow the context type:
+
+```typescript
+export default class MultiPurposeMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<UserCommandInteraction | MessageCommandInteraction>) {
+    if (ctx.isMenuUser()) {
+      // ctx.target is UserStructure
+      const user = ctx.target;
+      await ctx.write({ content: `User: ${user.username}` });
+    }
+    
+    if (ctx.isMenuMessage()) {
+      // ctx.target is MessageStructure
+      const message = ctx.target;
+      await ctx.write({ content: `Message content: ${message.content}` });
+    }
+  }
+}
+```
+
+## Practical Examples
+
+### Avatar Command
+
+```typescript
+import { ContextMenuCommand, Declare, ApplicationCommandType } from 'seyfert';
+import type { MenuCommandContext, UserCommandInteraction } from 'seyfert';
+import { EmbedBuilder } from 'seyfert/builders';
+
+@Declare({
+  name: 'Get Avatar',
+  type: ApplicationCommandType.User
+})
+export default class AvatarMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<UserCommandInteraction>) {
+    const user = ctx.target;
+    
+    const embed = new EmbedBuilder()
+      .setTitle(`${user.username}'s Avatar`)
+      .setImage(user.avatarURL({ size: 2048 }))
+      .setColor(0x5865F2);
+    
+    await ctx.write({ embeds: [embed] });
+  }
+}
+```
+
+### Translate Message
+
+```typescript
+import { ContextMenuCommand, Declare, ApplicationCommandType } from 'seyfert';
+import type { MenuCommandContext, MessageCommandInteraction } from 'seyfert';
+
+@Declare({
+  name: 'Translate',
+  type: ApplicationCommandType.Message
+})
+export default class TranslateMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<MessageCommandInteraction>) {
+    const message = ctx.target;
+    
+    if (!message.content) {
+      return ctx.write({
+        content: 'This message has no text to translate.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    await ctx.deferReply();
+    
+    // Your translation logic here
+    const translated = await translateText(message.content, 'en');
+    
+    await ctx.editResponse({
+      content: `**Original:**\n${message.content}\n\n**Translated:**\n${translated}`
+    });
+  }
+}
+```
+
+### Pin Message
+
+```typescript
+import { ContextMenuCommand, Declare, ApplicationCommandType } from 'seyfert';
+import type { MenuCommandContext, MessageCommandInteraction } from 'seyfert';
+
+@Declare({
+  name: 'Pin Message',
+  type: ApplicationCommandType.Message,
+  defaultMemberPermissions: 'ManageMessages',
+  botPermissions: 'ManageMessages'
+})
+export default class PinMessageMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<MessageCommandInteraction>) {
+    const message = ctx.target;
+    
+    try {
+      await message.pin();
+      await ctx.write({
+        content: 'Message pinned successfully!',
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      await ctx.write({
+        content: 'Failed to pin message. Check permissions.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+  }
+}
+```
+
+## Lifecycle Hooks
+
+Context menu commands support similar lifecycle hooks as chat commands:
+
+```typescript
+export default class MyContextMenu extends ContextMenuCommand {
+  async onBeforeMiddlewares(ctx: MenuCommandContext<any>) {
+    console.log('Before middlewares');
+  }
+  
+  async run(ctx: MenuCommandContext<any>) {
+    // Main command logic
+  }
+  
+  async onAfterRun(ctx: MenuCommandContext<any>, error: unknown | undefined) {
+    console.log('Command finished');
+  }
+  
+  async onRunError(ctx: MenuCommandContext<any>, error: unknown) {
+    await ctx.write({ 
+      content: 'An error occurred!',
+      flags: MessageFlags.Ephemeral 
+    });
+  }
+  
+  async onMiddlewaresError(ctx: MenuCommandContext<any>, error: string) {
+    await ctx.write({ 
+      content: `Middleware error: ${error}`,
+      flags: MessageFlags.Ephemeral 
+    });
+  }
+  
+  async onBotPermissionsFail(ctx: MenuCommandContext<any>, permissions: PermissionStrings) {
+    await ctx.write({ 
+      content: `I need ${permissions} permission`,
+      flags: MessageFlags.Ephemeral 
+    });
+  }
+}
+```
+
+## Guild-Specific Context Menus
+
+Restrict context menus to specific guilds during development:
+
+```typescript
+@Declare({
+  name: 'Admin Action',
+  type: ApplicationCommandType.User,
+  guildId: ['123456789012345678']
+})
+export default class AdminActionMenu extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<UserCommandInteraction>) {
+    // Only available in the specified guild
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Clear Names">
+    Context menu commands appear in Discord's UI, so use descriptive names that clearly indicate what the command does.
+    
+    Good: "Get User Info", "Report Message", "Copy Message Link"
+    
+    Bad: "info", "report", "copy"
+  </Accordion>
+  
+  <Accordion title="Use Ephemeral Responses">
+    For actions that don't need to be public, use ephemeral responses to keep the channel clean:
+    
+    ```typescript
+    await ctx.write({
+      content: 'Action completed!',
+      flags: MessageFlags.Ephemeral
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate Permissions">
+    Always check that both the user and bot have required permissions before executing actions:
+    
+    ```typescript
+    if (!ctx.member?.permissions.has('ManageMessages')) {
+      return ctx.write({
+        content: 'You need Manage Messages permission',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Errors Gracefully">
+    Context menu commands should handle errors and provide clear feedback:
+    
+    ```typescript
+    async onRunError(ctx: MenuCommandContext<any>, error: unknown) {
+      console.error('Context menu error:', error);
+      await ctx.write({
+        content: 'Something went wrong. Please try again later.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Limitations
+
+<Warning>
+  - Context menu commands cannot have options or parameters
+  - Command names are limited to 32 characters
+  - No subcommands or groups are supported
+  - You can have a maximum of 5 user commands and 5 message commands per application
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat Commands" icon="comments" href="/commands/chat-commands">
+    Learn about slash commands with options
+  </Card>
+  <Card title="Middleware" icon="filter" href="/commands/middleware">
+    Add middleware to context menu commands
+  </Card>
+  <Card title="Decorators" icon="at" href="/commands/decorators">
+    Explore available decorators
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Implement robust error handling
+  </Card>
+</CardGroup>

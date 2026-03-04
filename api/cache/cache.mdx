@@ -1,0 +1,435 @@
+---
+title: 'Cache'
+description: 'Core cache class for managing Discord data in Seyfert'
+---
+
+## Overview
+
+The `Cache` class is the central cache management system in Seyfert. It manages all cached Discord resources including guilds, channels, users, members, and more. The cache automatically handles gateway events and stores data using a configurable adapter.
+
+## Constructor
+
+```typescript
+new Cache(
+  intents: number,
+  adapter: Adapter,
+  disabledCache: DisabledCache,
+  client: UsingClient
+)
+```
+
+### Parameters
+
+<ParamField path="intents" type="number" required>
+  Gateway intents bitmask that determines what data the cache will track
+</ParamField>
+
+<ParamField path="adapter" type="Adapter" required>
+  Storage adapter for the cache (e.g., MemoryAdapter, LimitedMemoryAdapter)
+</ParamField>
+
+<ParamField path="disabledCache" type="DisabledCache" required>
+  Configuration object to disable specific cache resources
+</ParamField>
+
+<ParamField path="client" type="UsingClient" required>
+  The Seyfert client instance
+</ParamField>
+
+## Properties
+
+### Resource Properties
+
+<ResponseField name="users" type="Users | undefined">
+  User cache resource. Stores Discord user data.
+</ResponseField>
+
+<ResponseField name="guilds" type="Guilds | undefined">
+  Guild cache resource. Stores Discord guild (server) data.
+</ResponseField>
+
+<ResponseField name="members" type="Members | undefined">
+  Guild member cache resource. Stores guild-specific member data.
+</ResponseField>
+
+<ResponseField name="channels" type="Channels | undefined">
+  Channel cache resource. Stores Discord channel data.
+</ResponseField>
+
+<ResponseField name="roles" type="Roles | undefined">
+  Role cache resource. Stores guild role data.
+</ResponseField>
+
+<ResponseField name="emojis" type="Emojis | undefined">
+  Emoji cache resource. Stores guild emoji data.
+</ResponseField>
+
+<ResponseField name="stickers" type="Stickers | undefined">
+  Sticker cache resource. Stores guild sticker data.
+</ResponseField>
+
+<ResponseField name="voiceStates" type="VoiceStates | undefined">
+  Voice state cache resource. Stores voice connection states.
+</ResponseField>
+
+<ResponseField name="presences" type="Presences | undefined">
+  Presence cache resource. Stores user presence data.
+</ResponseField>
+
+<ResponseField name="messages" type="Messages | undefined">
+  Message cache resource. Stores Discord messages.
+</ResponseField>
+
+<ResponseField name="overwrites" type="Overwrites | undefined">
+  Permission overwrite cache resource. Stores channel permission overwrites.
+</ResponseField>
+
+<ResponseField name="stageInstances" type="StageInstances | undefined">
+  Stage instance cache resource. Stores stage channel instances.
+</ResponseField>
+
+<ResponseField name="bans" type="Bans | undefined">
+  Ban cache resource. Stores guild ban data.
+</ResponseField>
+
+### Core Properties
+
+<ResponseField name="intents" type="number">
+  Gateway intents bitmask configured for this cache
+</ResponseField>
+
+<ResponseField name="adapter" type="Adapter">
+  The storage adapter used by this cache
+</ResponseField>
+
+## Methods
+
+### flush()
+
+Clears all cached data from the adapter.
+
+```typescript
+flush(): ReturnCache<void>
+```
+
+**Example:**
+
+```typescript
+await client.cache.flush();
+```
+
+### bulkGet()
+
+Retrieve multiple cache entries at once.
+
+```typescript
+bulkGet(
+  keys: (
+    | readonly [type: NonGuildBased | GuildRelated, sourceId: string]
+    | readonly [type: GuildBased, sourceId: string, guildId: string]
+  )[]
+): Promise<Partial<{
+  messages: ReturnManagers['messages'][];
+  users: ReturnManagers['users'][];
+  guilds: ReturnManagers['guilds'][];
+  members: ReturnManagers['members'][];
+  // ... other resources
+}>>
+```
+
+**Example:**
+
+```typescript
+const data = await client.cache.bulkGet([
+  ['users', '123456789'],
+  ['members', '123456789', '987654321'],
+  ['channels', '111222333'],
+]);
+
+console.log(data.users); // User array
+console.log(data.members); // Member array
+```
+
+### bulkSet()
+
+Set multiple cache entries at once.
+
+```typescript
+bulkSet(
+  keys: (
+    | readonly [from: CacheFrom, type: NonGuildBased, data: any, sourceId: string]
+    | readonly [from: CacheFrom, type: GuildBased | GuildRelated, data: any, sourceId: string, guildId: string]
+  )[]
+): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await client.cache.bulkSet([
+  [CacheFrom.Rest, 'users', userData, '123456789'],
+  [CacheFrom.Rest, 'channels', channelData, '111222333', '987654321'],
+]);
+```
+
+### bulkPatch()
+
+Update multiple cache entries at once (merges with existing data).
+
+```typescript
+bulkPatch(
+  keys: (
+    | readonly [from: CacheFrom, type: NonGuildBased, data: any, sourceId: string]
+    | readonly [from: CacheFrom, type: GuildBased | GuildRelated, data: any, sourceId: string, guildId: string]
+  )[]
+): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await client.cache.bulkPatch([
+  [CacheFrom.Gateway, 'users', { username: 'NewName' }, '123456789'],
+]);
+```
+
+### onPacket()
+
+Processes gateway events and updates the cache accordingly. This is called automatically by Seyfert's gateway handler.
+
+```typescript
+onPacket(event: GatewayDispatchPayload): Promise<void>
+```
+
+**Cached Events:**
+
+The cache automatically processes these gateway events:
+
+- `READY` - Initial bot data
+- `GUILD_CREATE`, `GUILD_UPDATE`, `GUILD_DELETE` - Guild changes
+- `CHANNEL_CREATE`, `CHANNEL_UPDATE`, `CHANNEL_DELETE` - Channel changes
+- `GUILD_ROLE_CREATE`, `GUILD_ROLE_UPDATE`, `GUILD_ROLE_DELETE` - Role changes
+- `GUILD_MEMBER_ADD`, `GUILD_MEMBER_UPDATE`, `GUILD_MEMBER_REMOVE` - Member changes
+- `MESSAGE_CREATE`, `MESSAGE_UPDATE`, `MESSAGE_DELETE` - Message changes
+- `VOICE_STATE_UPDATE` - Voice state changes
+- `PRESENCE_UPDATE` - Presence changes
+- And more...
+
+### hasIntent()
+
+Check if a specific intent is enabled.
+
+```typescript
+hasIntent(intent: keyof typeof GatewayIntentBits): boolean
+```
+
+**Example:**
+
+```typescript
+if (client.cache.hasIntent('GuildMembers')) {
+  console.log('Guild members intent is enabled');
+}
+```
+
+### Intent Helper Properties
+
+<ResponseField name="hasGuildsIntent" type="boolean">
+  Whether the Guilds intent is enabled
+</ResponseField>
+
+<ResponseField name="hasRolesIntent" type="boolean">
+  Whether the Guilds intent is enabled (same as hasGuildsIntent)
+</ResponseField>
+
+<ResponseField name="hasChannelsIntent" type="boolean">
+  Whether the Guilds intent is enabled (same as hasGuildsIntent)
+</ResponseField>
+
+<ResponseField name="hasGuildMembersIntent" type="boolean">
+  Whether the GuildMembers intent is enabled
+</ResponseField>
+
+<ResponseField name="hasGuildExpressionsIntent" type="boolean">
+  Whether the GuildExpressions intent is enabled
+</ResponseField>
+
+<ResponseField name="hasVoiceStatesIntent" type="boolean">
+  Whether the GuildVoiceStates intent is enabled
+</ResponseField>
+
+<ResponseField name="hasPrenseceUpdates" type="boolean">
+  Whether the GuildPresences intent is enabled
+</ResponseField>
+
+<ResponseField name="hasDirectMessages" type="boolean">
+  Whether the DirectMessages intent is enabled
+</ResponseField>
+
+<ResponseField name="hasModerationIntent" type="boolean">
+  Whether the GuildModeration intent is enabled
+</ResponseField>
+
+### testAdapter()
+
+Tests the cache adapter to ensure it works correctly. Useful for validating custom adapters.
+
+```typescript
+testAdapter(): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await client.cache.testAdapter();
+// Logs: "The adapter seems to work properly"
+```
+
+## Types
+
+### DisabledCache
+
+Configuration object to disable specific cache resources.
+
+```typescript
+type DisabledCache = {
+  users?: boolean;
+  guilds?: boolean;
+  members?: boolean;
+  voiceStates?: boolean;
+  emojis?: boolean;
+  roles?: boolean;
+  channels?: boolean;
+  stickers?: boolean;
+  presences?: boolean;
+  stageInstances?: boolean;
+  overwrites?: boolean;
+  messages?: boolean;
+  bans?: boolean;
+  onPacket?: boolean;
+}
+```
+
+### CacheFrom
+
+Enum indicating the source of cached data.
+
+```typescript
+enum CacheFrom {
+  Gateway = 1,
+  Rest = 2,
+  Test = 3,
+}
+```
+
+### Resource Types
+
+```typescript
+// Guild-based resources (require guild ID)
+type GuildBased = 'members' | 'voiceStates';
+
+// Guild-related resources (associated with guilds)
+type GuildRelated =
+  | 'emojis'
+  | 'roles'
+  | 'channels'
+  | 'stickers'
+  | 'presences'
+  | 'stageInstances'
+  | 'overwrites'
+  | 'messages'
+  | 'bans';
+
+// Non-guild resources
+type NonGuildBased = 'users' | 'guilds';
+```
+
+## Usage Examples
+
+### Basic Cache Access
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client();
+
+// Access cached user
+const user = await client.cache.users?.get('123456789');
+
+// Access cached guild
+const guild = await client.cache.guilds?.get('987654321');
+
+// Access cached member
+const member = await client.cache.members?.get('123456789', '987654321');
+```
+
+### Disabling Cache Resources
+
+```typescript
+import { Client, MemoryAdapter } from 'seyfert';
+import { GatewayIntentBits } from 'seyfert/lib/types';
+
+const client = new Client({
+  intents: GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages,
+  cache: {
+    adapter: new MemoryAdapter(),
+    disabledCache: {
+      // Disable specific resources to save memory
+      presences: true,
+      messages: true,
+    },
+  },
+});
+```
+
+### Bulk Operations
+
+```typescript
+// Fetch multiple resources efficiently
+const data = await client.cache.bulkGet([
+  ['users', '111111111'],
+  ['users', '222222222'],
+  ['channels', '333333333'],
+  ['members', '111111111', '999999999'],
+]);
+
+// Access the results
+for (const user of data.users || []) {
+  console.log(user.username);
+}
+```
+
+### Custom Cache Filtering
+
+```typescript
+// Get all cached guilds
+const allGuilds = await client.cache.guilds?.values();
+
+// Get all members in a specific guild
+const guildMembers = await client.cache.members?.values('987654321');
+
+// Count cached items
+const userCount = await client.cache.users?.count();
+const memberCount = await client.cache.members?.count('987654321');
+```
+
+## Best Practices
+
+<Warning>
+  **Memory Management**: Cache can consume significant memory in large bots. Consider:
+  - Using `LimitedMemoryAdapter` with limits and expiration
+  - Disabling cache resources you don't need
+  - Implementing a custom adapter for databases like Redis
+</Warning>
+
+<Tip>
+  **Performance**: Bulk operations (`bulkGet`, `bulkSet`, `bulkPatch`) are more efficient than individual calls when working with multiple items.
+</Tip>
+
+<Note>
+  **Intents**: Cache resources require appropriate gateway intents. For example, caching members requires the `GuildMembers` intent.
+</Note>
+
+## See Also
+
+- [Cache Adapters](/api/cache/adapters) - Learn about storage adapters
+- [Cache Resources](/api/cache/resources) - Detailed resource documentation

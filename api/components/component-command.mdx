@@ -1,0 +1,282 @@
+---
+title: 'ComponentCommand'
+description: 'Base class for handling Discord component interactions'
+icon: 'mouse-pointer'
+---
+
+## Overview
+
+`ComponentCommand` is an abstract class that serves as the base for handling Discord component interactions such as buttons and select menus. It provides filtering, middleware support, and lifecycle hooks for component interactions.
+
+## Class Definition
+
+```typescript
+abstract class ComponentCommand {
+  type: 0; // InteractionCommandType.COMPONENT
+  abstract componentType: keyof ContextComponentCommandInteractionMap;
+  customId?: string | RegExp;
+  filter?(context: ComponentContext<typeof this.componentType>): Promise<boolean> | boolean;
+  abstract run(context: ComponentContext<typeof this.componentType>): any;
+  middlewares: (keyof RegisteredMiddlewares)[];
+  props: ExtraProps;
+}
+```
+
+## Properties
+
+### componentType
+
+<ParamField path="componentType" type="keyof ContextComponentCommandInteractionMap" required>
+  The type of component this command handles. Must be one of:
+  - `'Button'`
+  - `'StringSelect'`
+  - `'UserSelect'`
+  - `'RoleSelect'`
+  - `'MentionableSelect'`
+  - `'ChannelSelect'`
+</ParamField>
+
+### customId
+
+<ParamField path="customId" type="string | RegExp">
+  The custom ID to match against. Can be an exact string or a regular expression for pattern matching.
+</ParamField>
+
+### middlewares
+
+<ParamField path="middlewares" type="(keyof RegisteredMiddlewares)[]" default="[]">
+  Array of middleware names to execute before running the command.
+</ParamField>
+
+### props
+
+<ParamField path="props" type="ExtraProps">
+  Additional properties passed from middleware execution.
+</ParamField>
+
+### cType
+
+<ParamField path="cType" type="number">
+  Read-only getter that returns the numeric component type value.
+</ParamField>
+
+## Methods
+
+### run()
+
+<ParamField path="run" type="(context: ComponentContext) => any" required>
+  The main execution method called when the component interaction matches. This is where you implement your component logic.
+
+  **Parameters:**
+  - `context` - The component context containing interaction data and response methods
+
+  **Returns:** Any value (typically a Promise)
+</ParamField>
+
+### filter()
+
+<ParamField path="filter" type="(context: ComponentContext) => Promise<boolean> | boolean">
+  Optional filter method for additional validation beyond `customId` matching.
+
+  **Parameters:**
+  - `context` - The component context to validate
+
+  **Returns:** `true` to allow execution, `false` to reject
+</ParamField>
+
+## Lifecycle Hooks
+
+### onBeforeMiddlewares()
+
+<ParamField path="onBeforeMiddlewares" type="(context: ComponentContext) => any">
+  Called before middleware execution begins.
+</ParamField>
+
+### onAfterRun()
+
+<ParamField path="onAfterRun" type="(context: ComponentContext, error: unknown | undefined) => any">
+  Called after the `run()` method completes, regardless of success or failure.
+  
+  **Parameters:**
+  - `context` - The component context
+  - `error` - The error if one occurred, otherwise `undefined`
+</ParamField>
+
+### onRunError()
+
+<ParamField path="onRunError" type="(context: ComponentContext, error: unknown) => any">
+  Called when an error occurs during `run()` execution.
+  
+  **Parameters:**
+  - `context` - The component context
+  - `error` - The error that occurred
+</ParamField>
+
+### onMiddlewaresError()
+
+<ParamField path="onMiddlewaresError" type="(context: ComponentContext, error: string) => any">
+  Called when middleware execution fails.
+  
+  **Parameters:**
+  - `context` - The component context
+  - `error` - Error message from middleware
+</ParamField>
+
+### onInternalError()
+
+<ParamField path="onInternalError" type="(client: UsingClient, error?: unknown) => any">
+  Called when an internal framework error occurs.
+  
+  **Parameters:**
+  - `client` - The bot client instance
+  - `error` - The internal error
+</ParamField>
+
+## Examples
+
+### Basic Button Handler
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+import { ComponentType } from 'seyfert/lib/types';
+
+export default class ConfirmButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'confirm_action';
+
+  async run(ctx: ComponentContext<'Button'>) {
+    await ctx.write({
+      content: 'Action confirmed!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Button with RegExp Matching
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+
+export default class DeleteButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = /^delete_(\d+)$/; // Matches: delete_123, delete_456, etc.
+
+  async run(ctx: ComponentContext<'Button'>) {
+    const match = ctx.customId.match(this.customId as RegExp);
+    const itemId = match?.[1];
+
+    await ctx.deferUpdate();
+    // Delete item logic here
+    await ctx.editResponse({
+      content: `Item ${itemId} deleted.`,
+      components: []
+    });
+  }
+}
+```
+
+### Select Menu Handler
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+
+export default class RoleSelect extends ComponentCommand {
+  componentType = 'RoleSelect' as const;
+  customId = 'role_selection';
+
+  async run(ctx: ComponentContext<'RoleSelect'>) {
+    const selectedRoles = ctx.interaction.values;
+    
+    await ctx.write({
+      content: `You selected ${selectedRoles.length} role(s)`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Using Filter Method
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+
+export default class AdminButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'admin_panel';
+
+  async filter(ctx: ComponentContext<'Button'>) {
+    // Only allow admins to use this button
+    const member = await ctx.member;
+    return member?.permissions.has('Administrator') ?? false;
+  }
+
+  async run(ctx: ComponentContext<'Button'>) {
+    await ctx.write({
+      content: 'Opening admin panel...',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### With Middleware
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+
+export default class PremiumButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'premium_feature';
+  middlewares = ['checkPremium' as const];
+
+  onMiddlewaresError(ctx: ComponentContext, error: string) {
+    return ctx.write({
+      content: 'You need premium to use this feature!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  async run(ctx: ComponentContext<'Button'>) {
+    // This only runs if middleware passes
+    await ctx.write({
+      content: 'Premium feature activated!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Error Handling
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+
+export default class SafeButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'risky_action';
+
+  async run(ctx: ComponentContext<'Button'>) {
+    // Risky operation
+    throw new Error('Something went wrong!');
+  }
+
+  async onRunError(ctx: ComponentContext, error: unknown) {
+    console.error('Button error:', error);
+    
+    await ctx.write({
+      content: 'An error occurred while processing your request.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  async onAfterRun(ctx: ComponentContext, error: unknown | undefined) {
+    console.log(`Button ${ctx.customId} finished. Error: ${error ? 'Yes' : 'No'}`);
+  }
+}
+```
+
+## See Also
+
+- [ComponentContext](/api/components/component-context) - Context object for component interactions
+- [ModalCommand](/api/components/modal-command) - Handler for modal submit interactions

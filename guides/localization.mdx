@@ -1,0 +1,482 @@
+---
+title: "Localization (i18n)"
+description: "Add multi-language support to your Discord bot with Seyfert's localization system"
+---
+
+## Overview
+
+Seyfert's `LangsHandler` provides a powerful localization system that allows your bot to support multiple languages. It uses a proxy-based approach for type-safe translations with fallback support.
+
+## Setting Up Translations
+
+### Directory Structure
+
+Organize your translations in a dedicated directory:
+
+```
+project/
+├── src/
+│   ├── commands/
+│   └── langs/
+│       ├── en-US.ts    # English (default)
+│       ├── es-ES.ts    # Spanish
+│       ├── pt-BR.ts    # Portuguese
+│       └── ja-JP.ts    # Japanese
+└── seyfert.config.js
+```
+
+### Creating Translation Files
+
+Each language file exports a default object with your translations:
+
+```typescript src/langs/en-US.ts
+export default {
+  commands: {
+    ping: {
+      description: 'Check bot latency',
+      response: 'Pong! Latency: {latency}ms'
+    },
+    ban: {
+      description: 'Ban a user from the server',
+      success: 'Successfully banned {user}',
+      error: 'Failed to ban user: {reason}',
+      missingPermissions: 'You need Ban Members permission'
+    }
+  },
+  common: {
+    error: 'An error occurred',
+    success: 'Operation successful',
+    cancelled: 'Operation cancelled'
+  },
+  // Functions for dynamic content
+  greeting: (name: string) => `Hello, ${name}!`,
+  itemCount: (count: number) => `You have ${count} ${count === 1 ? 'item' : 'items'}`
+};
+```
+
+```typescript src/langs/es-ES.ts
+export default {
+  commands: {
+    ping: {
+      description: 'Verificar latencia del bot',
+      response: '¡Pong! Latencia: {latency}ms'
+    },
+    ban: {
+      description: 'Banear un usuario del servidor',
+      success: 'Usuario {user} baneado exitosamente',
+      error: 'Error al banear usuario: {reason}',
+      missingPermissions: 'Necesitas el permiso de Banear Miembros'
+    }
+  },
+  common: {
+    error: 'Ocurrió un error',
+    success: 'Operación exitosa',
+    cancelled: 'Operación cancelada'
+  },
+  greeting: (name: string) => `¡Hola, ${name}!`,
+  itemCount: (count: number) => `Tienes ${count} ${count === 1 ? 'artículo' : 'artículos'}`
+};
+```
+
+### Loading Translations
+
+Configure the LangsHandler in your client setup:
+
+```typescript src/index.ts
+import { Client } from 'seyfert';
+
+const client = new Client();
+
+await client.start();
+
+// Load all language files from the langs directory
+await client.langs.load('./src/langs');
+
+// Set default language
+client.langs.defaultLang = 'en-US';
+
+// Configure locale aliases (optional)
+client.langs.aliases = [
+  ['en', ['en-US', 'en-GB']],
+  ['es', ['es-ES', 'es-MX', 'es-AR']],
+  ['pt', ['pt-BR', 'pt-PT']]
+];
+```
+
+<Info>
+  The `langs` directory path should be relative to your project root or an absolute path.
+</Info>
+
+## Using Translations
+
+### In Commands
+
+Access translations through the context's `t()` method:
+
+```typescript
+import { Declare, Command, type CommandContext } from 'seyfert';
+
+@Declare({
+  name: 'ping',
+  description: 'Check bot latency'
+})
+export default class PingCommand extends Command {
+  async run(ctx: CommandContext) {
+    const t = ctx.t(); // Gets user's locale automatically
+    
+    // Access nested translations
+    const response = t.commands.ping.response.get();
+    
+    await ctx.write({
+      content: response.replace('{latency}', ctx.client.gateway.latency.toString())
+    });
+  }
+}
+```
+
+### With Functions
+
+Call translation functions and then use `.get()`:
+
+```typescript
+@Declare({
+  name: 'greet',
+  description: 'Greet a user'
+})
+export default class GreetCommand extends Command {
+  async run(ctx: CommandContext) {
+    const t = ctx.t();
+    const user = ctx.options.getUser('user', true);
+    
+    // Call function with arguments, then .get()
+    const greeting = t.greeting(user.username).get();
+    
+    await ctx.write({ content: greeting });
+  }
+}
+```
+
+### Fallback Locale
+
+If a translation is missing in the user's locale, Seyfert automatically falls back to the default language:
+
+```typescript
+// User locale: ja-JP (not fully translated)
+const t = ctx.t();
+
+// Tries ja-JP first, falls back to en-US
+const message = t.commands.newFeature.description.get();
+```
+
+### Specific Locale
+
+Override the user's locale to get a specific translation:
+
+```typescript
+const t = ctx.t();
+
+// Get English version specifically
+const englishText = t.commands.ping.description.get('en-US');
+
+// Get Spanish version specifically
+const spanishText = t.commands.ping.description.get('es-ES');
+```
+
+## Type Safety
+
+Make your translations type-safe with TypeScript:
+
+```typescript src/types/locales.ts
+import type enUS from '../langs/en-US';
+
+declare module 'seyfert' {
+  interface DefaultLocale extends Record<string, any> {
+    // Use your default language as the type
+  }
+}
+
+// Export the locale type
+export type Locale = typeof enUS;
+```
+
+Now you get autocomplete and type checking:
+
+```typescript
+const t = ctx.t();
+
+// ✅ TypeScript knows these paths exist
+t.commands.ping.response.get();
+t.common.error.get();
+
+// ❌ TypeScript error: path doesn't exist
+t.commands.nonexistent.get();
+```
+
+## Locale Aliases
+
+Group similar locales together to reduce duplication:
+
+```typescript
+client.langs.aliases = [
+  // Use 'en' file for both en-US and en-GB
+  ['en', ['en-US', 'en-GB']],
+  
+  // Use 'es' file for all Spanish variants
+  ['es', ['es-ES', 'es-MX', 'es-AR', 'es-419']],
+  
+  // Use 'zh' file for Chinese variants
+  ['zh', ['zh-CN', 'zh-TW', 'zh-HK']]
+];
+```
+
+With this configuration:
+- When a user has locale `en-GB`, Seyfert uses the `en.ts` file
+- When a user has locale `es-MX`, Seyfert uses the `es.ts` file
+- Reduces the number of translation files you need to maintain
+
+## Programmatic Access
+
+Access translations outside of command contexts:
+
+```typescript
+import { client } from './index';
+
+// Get translation for specific locale
+const t = client.langs.get('es-ES');
+const message = t.common.error.get();
+
+// Get translation key directly
+const value = client.langs.getKey('en-US', 'commands.ping.description');
+console.log(value); // 'Check bot latency'
+```
+
+## Advanced Patterns
+
+### Pluralization
+
+Handle plural forms in your translations:
+
+```typescript src/langs/en-US.ts
+export default {
+  items: {
+    count: (n: number) => {
+      if (n === 0) return 'No items';
+      if (n === 1) return '1 item';
+      return `${n} items`;
+    }
+  }
+};
+```
+
+```typescript src/langs/es-ES.ts
+export default {
+  items: {
+    count: (n: number) => {
+      if (n === 0) return 'Sin artículos';
+      if (n === 1) return '1 artículo';
+      return `${n} artículos`;
+    }
+  }
+};
+```
+
+Usage:
+```typescript
+const t = ctx.t();
+const message = t.items.count(5).get(); // "5 items" or "5 artículos"
+```
+
+### Gendered Translations
+
+```typescript
+export default {
+  welcome: {
+    message: (name: string, gender: 'male' | 'female' | 'other') => {
+      if (gender === 'male') return `Welcome, Mr. ${name}!`;
+      if (gender === 'female') return `Welcome, Ms. ${name}!`;
+      return `Welcome, ${name}!`;
+    }
+  }
+};
+```
+
+### Nested Parameters
+
+```typescript
+export default {
+  moderation: {
+    ban: {
+      log: (moderator: string, user: string, reason: string) => 
+        `**${moderator}** banned **${user}**\nReason: ${reason}`
+    }
+  }
+};
+```
+
+Usage:
+```typescript
+const t = ctx.t();
+const log = t.moderation.ban.log(
+  ctx.author.username,
+  target.username,
+  'Spam'
+).get();
+```
+
+## Command Localization
+
+Localize command names and descriptions for Discord's native localization:
+
+```typescript
+import { Declare, Command, Locales } from 'seyfert';
+
+@Declare({
+  name: 'ping',
+  description: 'Check bot latency',
+  name_localizations: {
+    [Locales.SpanishES]: 'latencia',
+    [Locales.PortugueseBR]: 'latência'
+  },
+  description_localizations: {
+    [Locales.SpanishES]: 'Verificar latencia del bot',
+    [Locales.PortugueseBR]: 'Verificar latência do bot'
+  }
+})
+export default class PingCommand extends Command {
+  // ...
+}
+```
+
+<Tip>
+  Command name/description localizations are separate from your translation system and are handled by Discord directly.
+</Tip>
+
+## Reloading Translations
+
+### Reload Single Language
+
+```typescript
+// Reload Spanish translations
+await client.langs.reload('es-ES');
+```
+
+### Reload All Languages
+
+```typescript
+// Reload all language files
+await client.langs.reloadAll();
+
+// Stop on first error
+await client.langs.reloadAll(true);
+
+// Continue even if some files fail
+await client.langs.reloadAll(false);
+```
+
+<Warning>
+  Translation reloading is not supported in Cloudflare Workers environments.
+</Warning>
+
+## Setting Translations Manually
+
+For advanced use cases, set translations programmatically:
+
+```typescript
+import enUS from './langs/en-US';
+import esES from './langs/es-ES';
+
+client.langs.set([
+  { name: 'en-US', file: enUS, path: './langs/en-US.ts' },
+  { name: 'es-ES', file: esES, path: './langs/es-ES.ts' }
+]);
+```
+
+## Error Handling
+
+Handle missing translations gracefully:
+
+```typescript
+try {
+  const t = ctx.t();
+  const message = t.commands.myCommand.description.get();
+  await ctx.write({ content: message });
+} catch (error) {
+  if (error instanceof SeyfertError && error.code === 'UNDEFINED_LOCALE') {
+    // Fallback to default language
+    const t = client.langs.get(client.langs.defaultLang!);
+    const message = t.commands.myCommand.description.get();
+    await ctx.write({ content: message });
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Set a Default Language" icon="language">
+    ```typescript
+    client.langs.defaultLang = 'en-US';
+    ```
+    This ensures fallback works properly when translations are missing.
+  </Accordion>
+  
+  <Accordion title="Keep Translation Keys Consistent" icon="list-check">
+    Use the same structure across all language files:
+    ```typescript
+    // ✅ Good - same structure in all files
+    { commands: { ping: { response: '...' } } }
+    
+    // ❌ Bad - different structures
+    { commands: { ping: '...' } }  // in en-US
+    { cmd: { ping: { msg: '...' } } }  // in es-ES
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Functions for Dynamic Content" icon="code">
+    Instead of string templates, use functions:
+    ```typescript
+    // ✅ Better
+    welcome: (name: string) => `Welcome, ${name}!`
+    
+    // ❌ Harder to use
+    welcome: 'Welcome, {name}!'
+    ```
+  </Accordion>
+  
+  <Accordion title="Group Related Translations" icon="folder-tree">
+    ```typescript
+    {
+      commands: { /* command-related */ },
+      errors: { /* error messages */ },
+      common: { /* reusable strings */ },
+      embeds: { /* embed content */ }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Locale Aliases to Reduce Duplication" icon="clone">
+    ```typescript
+    // Instead of maintaining en-US.ts and en-GB.ts separately
+    client.langs.aliases = [['en', ['en-US', 'en-GB']]];
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance Considerations
+
+- Translations are loaded into memory at startup
+- The proxy system has minimal runtime overhead
+- Fallback lookups are cached for performance
+- Reloading translations clears Node's require cache
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="/api/commands">
+    Learn about command structure and contexts
+  </Card>
+  
+  <Card title="Discord Locales" icon="globe" href="https://discord.com/developers/docs/reference#locales">
+    View all Discord locale codes
+  </Card>
+</CardGroup>

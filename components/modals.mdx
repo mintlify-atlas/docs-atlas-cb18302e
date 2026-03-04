@@ -1,0 +1,491 @@
+---
+title: 'Modals'
+description: 'Create interactive modal dialogs to collect user input'
+icon: 'window'
+---
+
+Modals are pop-up forms that allow you to collect detailed input from users. They can contain multiple text input fields and other components organized in action rows.
+
+## Creating Modals
+
+Use the `Modal` builder class to create modal dialogs:
+
+```typescript
+import { Modal, ActionRow, TextInput, TextInputStyle } from 'seyfert';
+
+const modal = new Modal()
+  .setCustomId('feedback-modal')
+  .setTitle('Feedback Form')
+  .addComponents(
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('feedback-title')
+        .setLabel('Title')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Brief summary')
+        .setRequired(true)
+    ),
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('feedback-details')
+        .setLabel('Details')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Provide detailed feedback')
+        .setRequired(true)
+    )
+  );
+```
+
+## Modal Properties
+
+### Custom ID
+
+Set a unique identifier for the modal (max 100 characters):
+
+```typescript
+modal.setCustomId('user-registration');
+```
+
+### Title
+
+Set the modal's title displayed at the top (max 45 characters):
+
+```typescript
+modal.setTitle('User Registration');
+```
+
+### Components
+
+Add components to the modal:
+
+```typescript
+// Add components one at a time
+modal.addComponents(
+  new ActionRow<TextInput>().addComponents(
+    new TextInput()
+      .setCustomId('username')
+      .setLabel('Username')
+      .setStyle(TextInputStyle.Short)
+  )
+);
+
+// Set all components at once
+modal.setComponents([
+  new ActionRow<TextInput>().addComponents(
+    new TextInput()
+      .setCustomId('field1')
+      .setLabel('Field 1')
+      .setStyle(TextInputStyle.Short)
+  ),
+  new ActionRow<TextInput>().addComponents(
+    new TextInput()
+      .setCustomId('field2')
+      .setLabel('Field 2')
+      .setStyle(TextInputStyle.Short)
+  )
+]);
+```
+
+<Note>
+  Modals can contain up to 5 action rows, each with one text input component.
+</Note>
+
+## Showing Modals
+
+Display a modal in response to an interaction:
+
+```typescript
+import { Command } from 'seyfert';
+import { Modal, ActionRow, TextInput, TextInputStyle } from 'seyfert';
+
+export default class FeedbackCommand extends Command {
+  async run(ctx: CommandContext) {
+    const modal = new Modal()
+      .setCustomId('feedback-modal')
+      .setTitle('Submit Feedback')
+      .addComponents(
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('feedback-text')
+            .setLabel('Your Feedback')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Tell us what you think...')
+            .setRequired(true)
+        )
+      );
+    
+    await ctx.modal(modal);
+  }
+}
+```
+
+### From Button Interaction
+
+Show a modal when a button is clicked:
+
+```typescript
+import { ComponentCommand, ComponentType } from 'seyfert';
+import { Modal, ActionRow, TextInput, TextInputStyle } from 'seyfert';
+
+export default class ReportButton extends ComponentCommand {
+  componentType = ComponentType.Button as const;
+  customId = 'report-user';
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const modal = new Modal()
+      .setCustomId('report-modal')
+      .setTitle('Report User')
+      .addComponents(
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('report-reason')
+            .setLabel('Reason')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+        )
+      );
+    
+    await ctx.modal(modal);
+  }
+}
+```
+
+## Handling Modal Submissions
+
+Create a modal command to handle submissions:
+
+```typescript
+import { ModalCommand } from 'seyfert';
+import type { ModalContext } from 'seyfert';
+
+export default class FeedbackModal extends ModalCommand {
+  customId = 'feedback-modal';
+  
+  async run(ctx: ModalContext) {
+    // Get submitted values
+    const title = ctx.fields.getTextInputValue('feedback-title');
+    const details = ctx.fields.getTextInputValue('feedback-details');
+    
+    // Process the feedback
+    console.log('Feedback received:', { title, details });
+    
+    await ctx.write({
+      content: 'Thank you for your feedback!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Pattern Matching
+
+Use regular expressions to handle multiple modals:
+
+```typescript
+export default class FormModals extends ModalCommand {
+  customId = /^form-(.+)$/;
+  
+  async run(ctx: ModalContext) {
+    const formType = ctx.customId.match(/^form-(.+)$/)?.[1];
+    
+    await ctx.write({
+      content: `Received ${formType} form submission!`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Custom Filter
+
+Add custom validation logic:
+
+```typescript
+export default class PremiumModal extends ModalCommand {
+  customId = 'premium-feature';
+  
+  async filter(ctx: ModalContext) {
+    // Only allow premium users
+    const user = await getUserFromDatabase(ctx.author.id);
+    return user.isPremium;
+  }
+  
+  async run(ctx: ModalContext) {
+    await ctx.write({
+      content: 'Premium feature activated!'
+    });
+  }
+}
+```
+
+## Accessing Modal Data
+
+Retrieve submitted values from the modal context:
+
+```typescript
+async run(ctx: ModalContext) {
+  // Get individual field values
+  const username = ctx.fields.getTextInputValue('username');
+  const bio = ctx.fields.getTextInputValue('bio');
+  
+  // Get all components
+  const components = ctx.components;
+  
+  // Access custom ID
+  const modalId = ctx.customId;
+  
+  console.log({ username, bio, modalId });
+}
+```
+
+## Text Input Components
+
+Modals use text input components for user input. See the [Text Inputs](/components/text-inputs) page for detailed information.
+
+### Short Text Input
+
+```typescript
+const shortInput = new TextInput()
+  .setCustomId('email')
+  .setLabel('Email Address')
+  .setStyle(TextInputStyle.Short)
+  .setPlaceholder('user@example.com')
+  .setRequired(true)
+  .setLength({ min: 5, max: 100 });
+```
+
+### Paragraph Text Input
+
+```typescript
+const paragraphInput = new TextInput()
+  .setCustomId('description')
+  .setLabel('Description')
+  .setStyle(TextInputStyle.Paragraph)
+  .setPlaceholder('Enter a detailed description...')
+  .setRequired(false)
+  .setLength({ max: 1000 });
+```
+
+## Modal with Callback
+
+You can attach a callback function that executes when the modal is submitted:
+
+```typescript
+const modal = new Modal()
+  .setCustomId('quick-form')
+  .setTitle('Quick Form')
+  .addComponents(
+    new ActionRow<TextInput>().addComponents(
+      new TextInput()
+        .setCustomId('input')
+        .setLabel('Input')
+        .setStyle(TextInputStyle.Short)
+    )
+  )
+  .run(async (ctx: ModalContext) => {
+    const value = ctx.fields.getTextInputValue('input');
+    await ctx.write({
+      content: `You entered: ${value}`,
+      flags: MessageFlags.Ephemeral
+    });
+  });
+```
+
+<Warning>
+  The `run()` callback is executed inline. For complex logic, create a separate `ModalCommand` class.
+</Warning>
+
+## Complete Example
+
+Here's a complete bug report system:
+
+```typescript
+// Command to show the modal
+import { Command } from 'seyfert';
+import { Modal, ActionRow, TextInput, TextInputStyle } from 'seyfert';
+
+export default class BugReportCommand extends Command {
+  async run(ctx: CommandContext) {
+    const modal = new Modal()
+      .setCustomId('bug-report')
+      .setTitle('Bug Report')
+      .addComponents(
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('bug-title')
+            .setLabel('Bug Title')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Brief description of the bug')
+            .setRequired(true)
+            .setLength({ min: 10, max: 100 })
+        ),
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('bug-description')
+            .setLabel('Description')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Detailed description of the issue')
+            .setRequired(true)
+            .setLength({ min: 20, max: 1000 })
+        ),
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('bug-steps')
+            .setLabel('Steps to Reproduce')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('1. First step\n2. Second step\n3. ...')
+            .setRequired(true)
+        ),
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('bug-expected')
+            .setLabel('Expected Behavior')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('What should happen?')
+            .setRequired(false)
+        ),
+        new ActionRow<TextInput>().addComponents(
+          new TextInput()
+            .setCustomId('bug-actual')
+            .setLabel('Actual Behavior')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('What actually happened?')
+            .setRequired(false)
+        )
+      );
+    
+    await ctx.modal(modal);
+  }
+}
+
+// Modal submission handler
+import { ModalCommand } from 'seyfert';
+import type { ModalContext } from 'seyfert';
+
+export default class BugReportModal extends ModalCommand {
+  customId = 'bug-report';
+  
+  async run(ctx: ModalContext) {
+    const title = ctx.fields.getTextInputValue('bug-title');
+    const description = ctx.fields.getTextInputValue('bug-description');
+    const steps = ctx.fields.getTextInputValue('bug-steps');
+    const expected = ctx.fields.getTextInputValue('bug-expected');
+    const actual = ctx.fields.getTextInputValue('bug-actual');
+    
+    // Create bug report embed
+    const embed = new Embed()
+      .setTitle(`Bug Report: ${title}`)
+      .setDescription(description)
+      .addFields(
+        { name: 'Steps to Reproduce', value: steps },
+        { name: 'Expected Behavior', value: expected || 'Not provided' },
+        { name: 'Actual Behavior', value: actual || 'Not provided' }
+      )
+      .setColor(0xFF0000)
+      .setFooter({ text: `Reported by ${ctx.author.username}` })
+      .setTimestamp();
+    
+    // Send to bug reports channel
+    const bugChannel = await ctx.client.channels.fetch('BUG_REPORTS_CHANNEL_ID');
+    if (bugChannel?.isTextBased()) {
+      await bugChannel.messages.write({
+        embeds: [embed]
+      });
+    }
+    
+    await ctx.write({
+      content: '✅ Bug report submitted successfully! Thank you for your feedback.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Validation and Error Handling
+
+Validate modal inputs before processing:
+
+```typescript
+export default class EmailModal extends ModalCommand {
+  customId = 'email-form';
+  
+  async run(ctx: ModalContext) {
+    const email = ctx.fields.getTextInputValue('email');
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return ctx.write({
+        content: '❌ Invalid email format. Please try again.',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    
+    // Process valid email
+    await saveEmail(ctx.author.id, email);
+    
+    await ctx.write({
+      content: '✅ Email saved successfully!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Lifecycle Hooks
+
+Modal commands support lifecycle hooks for advanced control:
+
+```typescript
+export default class TrackedModal extends ModalCommand {
+  customId = 'tracked-form';
+  
+  async onBeforeMiddlewares(ctx: ModalContext) {
+    console.log('Before middlewares:', ctx.customId);
+  }
+  
+  async run(ctx: ModalContext) {
+    // Main handler logic
+  }
+  
+  async onAfterRun(ctx: ModalContext, error: unknown | undefined) {
+    console.log('After run:', error ? 'Failed' : 'Success');
+  }
+  
+  async onRunError(ctx: ModalContext, error: unknown) {
+    console.error('Run error:', error);
+    await ctx.write({
+      content: 'An error occurred while processing your submission.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Clear Labels" icon="tag">
+    Use descriptive labels and placeholders to guide users on what input is expected.
+  </Card>
+  
+  <Card title="Validate Input" icon="check">
+    Always validate user input on the server side before processing or storing data.
+  </Card>
+  
+  <Card title="Set Length Limits" icon="ruler">
+    Define minimum and maximum length constraints to ensure data quality.
+  </Card>
+  
+  <Card title="Provide Feedback" icon="comments">
+    Always respond to modal submissions to confirm successful processing or report errors.
+  </Card>
+</CardGroup>
+
+## Limitations
+
+- Modals can have a maximum of 5 action rows
+- Each action row can contain only 1 text input component
+- Modal titles are limited to 45 characters
+- Custom IDs are limited to 100 characters
+- Modals can only be shown in response to interactions (commands, buttons, select menus)

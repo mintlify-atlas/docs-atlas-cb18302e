@@ -1,0 +1,504 @@
+---
+title: 'Cache Adapters'
+description: 'Storage adapters for Seyfert cache system'
+---
+
+## Overview
+
+Cache adapters define how Seyfert stores and retrieves cached data. Seyfert provides built-in adapters for in-memory storage, and you can create custom adapters for databases like Redis, PostgreSQL, or any other storage backend.
+
+## Adapter Interface
+
+All adapters must implement the `Adapter` interface:
+
+```typescript
+interface Adapter {
+  isAsync: boolean;
+
+  start(): Awaitable<void>;
+  
+  scan(query: string, keys?: boolean): Awaitable<any[] | string[]>;
+  
+  bulkGet(keys: string[]): Awaitable<any[]>;
+  get(keys: string): Awaitable<any | null>;
+  
+  bulkSet(keyValue: [string, any][]): Awaitable<void>;
+  set(id: string, data: any): Awaitable<void>;
+  
+  bulkPatch(keyValue: [string, any][]): Awaitable<void>;
+  patch(id: string, data: any): Awaitable<void>;
+  
+  values(to: string): Awaitable<any[]>;
+  keys(to: string): Awaitable<string[]>;
+  count(to: string): Awaitable<number>;
+  
+  bulkRemove(keys: string[]): Awaitable<void>;
+  remove(keys: string): Awaitable<void>;
+  
+  flush(): Awaitable<void>;
+  
+  contains(to: string, keys: string): Awaitable<boolean>;
+  
+  getToRelationship(to: string): Awaitable<string[]>;
+  bulkAddToRelationShip(data: Record<string, string[]>): Awaitable<void>;
+  addToRelationship(to: string, keys: string | string[]): Awaitable<void>;
+  removeToRelationship(to: string, keys: string | string[]): Awaitable<void>;
+  removeRelationship(to: string | string[]): Awaitable<void>;
+}
+```
+
+### Property
+
+<ParamField path="isAsync" type="boolean" required>
+  Indicates whether the adapter uses async operations. Set to `true` for database adapters, `false` for in-memory adapters.
+</ParamField>
+
+### Required Methods
+
+<ParamField path="start" type="() => Awaitable<void>" required>
+  Initialize the adapter. Called when the client starts.
+</ParamField>
+
+<ParamField path="get" type="(key: string) => Awaitable<any | null>" required>
+  Retrieve a single value by key. Returns `null` if not found.
+</ParamField>
+
+<ParamField path="bulkGet" type="(keys: string[]) => Awaitable<any[]>" required>
+  Retrieve multiple values by keys. Returns array of values (excluding nulls).
+</ParamField>
+
+<ParamField path="set" type="(id: string, data: any) => Awaitable<void>" required>
+  Store a single value with the given key.
+</ParamField>
+
+<ParamField path="bulkSet" type="(keyValue: [string, any][]) => Awaitable<void>" required>
+  Store multiple key-value pairs at once.
+</ParamField>
+
+<ParamField path="patch" type="(id: string, data: any) => Awaitable<void>" required>
+  Update a value by merging with existing data. Arrays should replace, objects should merge.
+</ParamField>
+
+<ParamField path="bulkPatch" type="(keyValue: [string, any][]) => Awaitable<void>" required>
+  Update multiple values by merging with existing data.
+</ParamField>
+
+<ParamField path="remove" type="(key: string) => Awaitable<void>" required>
+  Remove a single entry by key.
+</ParamField>
+
+<ParamField path="bulkRemove" type="(keys: string[]) => Awaitable<void>" required>
+  Remove multiple entries by keys.
+</ParamField>
+
+<ParamField path="flush" type="() => Awaitable<void>" required>
+  Clear all data from storage.
+</ParamField>
+
+<ParamField path="scan" type="(query: string, keys?: boolean) => Awaitable<any[] | string[]>" required>
+  Scan for entries matching a pattern. Supports wildcards (`*`). If `keys` is true, return keys instead of values.
+</ParamField>
+
+<ParamField path="values" type="(to: string) => Awaitable<any[]>" required>
+  Get all values for a namespace.
+</ParamField>
+
+<ParamField path="keys" type="(to: string) => Awaitable<string[]>" required>
+  Get all keys for a namespace.
+</ParamField>
+
+<ParamField path="count" type="(to: string) => Awaitable<number>" required>
+  Count entries in a namespace.
+</ParamField>
+
+<ParamField path="contains" type="(to: string, keys: string) => Awaitable<boolean>" required>
+  Check if a key exists in a namespace.
+</ParamField>
+
+<ParamField path="getToRelationship" type="(to: string) => Awaitable<string[]>" required>
+  Get relationship data for a namespace. Used for tracking which IDs belong to which namespace.
+</ParamField>
+
+<ParamField path="addToRelationship" type="(to: string, keys: string | string[]) => Awaitable<void>" required>
+  Add keys to a namespace relationship.
+</ParamField>
+
+<ParamField path="bulkAddToRelationShip" type="(data: Record<string, string[]>) => Awaitable<void>" required>
+  Add multiple relationships at once.
+</ParamField>
+
+<ParamField path="removeToRelationship" type="(to: string, keys: string | string[]) => Awaitable<void>" required>
+  Remove keys from a namespace relationship.
+</ParamField>
+
+<ParamField path="removeRelationship" type="(to: string | string[]) => Awaitable<void>" required>
+  Remove entire namespace relationships.
+</ParamField>
+
+## Built-in Adapters
+
+### MemoryAdapter
+
+A simple in-memory storage adapter using JavaScript `Map`. Best for development and small bots.
+
+```typescript
+class MemoryAdapter<T> implements Adapter {
+  isAsync = false;
+  
+  constructor(options?: MemoryAdapterOptions<T>);
+}
+```
+
+#### Options
+
+```typescript
+interface MemoryAdapterOptions<T> {
+  encode(data: any): T;
+  decode(data: T): unknown;
+}
+```
+
+<ParamField path="encode" type="(data: any) => T">
+  Transform data before storing. Default: identity function.
+</ParamField>
+
+<ParamField path="decode" type="(data: T) => unknown">
+  Transform data when retrieving. Default: identity function.
+</ParamField>
+
+#### Example
+
+```typescript
+import { Client, MemoryAdapter } from 'seyfert';
+import { GatewayIntentBits } from 'seyfert/lib/types';
+
+const client = new Client({
+  intents: GatewayIntentBits.Guilds,
+  cache: {
+    adapter: new MemoryAdapter(),
+  },
+});
+```
+
+#### Custom Encoding
+
+```typescript
+import { MemoryAdapter } from 'seyfert';
+
+const adapter = new MemoryAdapter({
+  // Compress data before storing
+  encode(data) {
+    return JSON.stringify(data);
+  },
+  // Decompress when retrieving
+  decode(data) {
+    return JSON.parse(data);
+  },
+});
+```
+
+### LimitedMemoryAdapter
+
+An in-memory adapter with TTL (time-to-live) and size limits per resource type. Ideal for production bots that need memory management.
+
+```typescript
+class LimitedMemoryAdapter<T> implements Adapter {
+  isAsync = false;
+  
+  constructor(options?: LimitedMemoryAdapterOptions<T>);
+}
+```
+
+#### Options
+
+```typescript
+interface LimitedMemoryAdapterOptions<T> {
+  default?: ResourceLimitedMemoryAdapter;
+  
+  guild?: ResourceLimitedMemoryAdapter;
+  user?: ResourceLimitedMemoryAdapter;
+  ban?: ResourceLimitedMemoryAdapter;
+  member?: ResourceLimitedMemoryAdapter;
+  voice_state?: ResourceLimitedMemoryAdapter;
+  channel?: ResourceLimitedMemoryAdapter;
+  emoji?: ResourceLimitedMemoryAdapter;
+  presence?: ResourceLimitedMemoryAdapter;
+  role?: ResourceLimitedMemoryAdapter;
+  stage_instance?: ResourceLimitedMemoryAdapter;
+  sticker?: ResourceLimitedMemoryAdapter;
+  overwrite?: ResourceLimitedMemoryAdapter;
+  message?: ResourceLimitedMemoryAdapter;
+  
+  encode?(data: any): T;
+  decode?(data: T): unknown;
+}
+
+interface ResourceLimitedMemoryAdapter {
+  expire?: number;  // TTL in milliseconds
+  limit?: number;   // Max items to store
+}
+```
+
+<ParamField path="default" type="ResourceLimitedMemoryAdapter">
+  Default limits applied to all resources. Default: `{ limit: Infinity, expire: undefined }`
+</ParamField>
+
+<ParamField path="guild" type="ResourceLimitedMemoryAdapter">
+  Limits specific to guilds
+</ParamField>
+
+<ParamField path="user" type="ResourceLimitedMemoryAdapter">
+  Limits specific to users
+</ParamField>
+
+<ParamField path="member" type="ResourceLimitedMemoryAdapter">
+  Limits specific to members
+</ParamField>
+
+<ParamField path="message" type="ResourceLimitedMemoryAdapter">
+  Limits specific to messages
+</ParamField>
+
+<ParamField path="channel" type="ResourceLimitedMemoryAdapter">
+  Limits specific to channels
+</ParamField>
+
+<ParamField path="encode" type="(data: any) => T">
+  Transform data before storing
+</ParamField>
+
+<ParamField path="decode" type="(data: T) => unknown">
+  Transform data when retrieving
+</ParamField>
+
+#### Example
+
+```typescript
+import { Client, LimitedMemoryAdapter } from 'seyfert';
+import { GatewayIntentBits } from 'seyfert/lib/types';
+
+const client = new Client({
+  intents: GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages,
+  cache: {
+    adapter: new LimitedMemoryAdapter({
+      // Default limits for all resources
+      default: {
+        limit: 1000,
+        expire: 3600000, // 1 hour
+      },
+      // Messages: keep last 100 per channel, expire after 5 minutes
+      message: {
+        limit: 100,
+        expire: 300000,
+      },
+      // Members: keep last 500 per guild, no expiration
+      member: {
+        limit: 500,
+      },
+      // Users: unlimited, expire after 1 hour
+      user: {
+        expire: 3600000,
+      },
+    }),
+  },
+});
+```
+
+## Creating Custom Adapters
+
+You can create custom adapters for any storage backend. Here's an example Redis adapter:
+
+### Redis Adapter Example
+
+```typescript
+import { Adapter } from 'seyfert';
+import { createClient, type RedisClientType } from 'redis';
+
+export class RedisAdapter implements Adapter {
+  isAsync = true;
+  private client: RedisClientType;
+  
+  constructor(redisUrl: string) {
+    this.client = createClient({ url: redisUrl });
+  }
+  
+  async start() {
+    await this.client.connect();
+  }
+  
+  async get(key: string) {
+    const data = await this.client.get(key);
+    return data ? JSON.parse(data) : null;
+  }
+  
+  async bulkGet(keys: string[]) {
+    const data = await this.client.mGet(keys);
+    return data.filter(x => x).map(x => JSON.parse(x!));
+  }
+  
+  async set(key: string, data: any) {
+    await this.client.set(key, JSON.stringify(data));
+  }
+  
+  async bulkSet(keyValue: [string, any][]) {
+    const pipeline = this.client.multi();
+    for (const [key, value] of keyValue) {
+      pipeline.set(key, JSON.stringify(value));
+    }
+    await pipeline.exec();
+  }
+  
+  async patch(key: string, data: any) {
+    const existing = await this.get(key);
+    const merged = Array.isArray(data)
+      ? data
+      : { ...existing, ...data };
+    await this.set(key, merged);
+  }
+  
+  async bulkPatch(keyValue: [string, any][]) {
+    for (const [key, value] of keyValue) {
+      await this.patch(key, value);
+    }
+  }
+  
+  async remove(key: string) {
+    await this.client.del(key);
+  }
+  
+  async bulkRemove(keys: string[]) {
+    if (keys.length) await this.client.del(keys);
+  }
+  
+  async flush() {
+    await this.client.flushDb();
+  }
+  
+  async scan(query: string, keys = false) {
+    const pattern = query.replace(/\*/g, '*');
+    const results: string[] = [];
+    
+    for await (const key of this.client.scanIterator({ MATCH: pattern })) {
+      results.push(key);
+    }
+    
+    if (keys) return results;
+    return this.bulkGet(results);
+  }
+  
+  async values(to: string) {
+    const keys = await this.keys(to);
+    return this.bulkGet(keys);
+  }
+  
+  async keys(to: string) {
+    const relationship = await this.getToRelationship(to);
+    return relationship.map(id => `${to}.${id}`);
+  }
+  
+  async count(to: string) {
+    const relationship = await this.getToRelationship(to);
+    return relationship.length;
+  }
+  
+  async contains(to: string, key: string) {
+    const isMember = await this.client.sIsMember(`rel:${to}`, key);
+    return isMember;
+  }
+  
+  async getToRelationship(to: string) {
+    return this.client.sMembers(`rel:${to}`);
+  }
+  
+  async addToRelationship(to: string, keys: string | string[]) {
+    const keyArray = Array.isArray(keys) ? keys : [keys];
+    if (keyArray.length) {
+      await this.client.sAdd(`rel:${to}`, keyArray);
+    }
+  }
+  
+  async bulkAddToRelationShip(data: Record<string, string[]>) {
+    const pipeline = this.client.multi();
+    for (const [to, keys] of Object.entries(data)) {
+      if (keys.length) pipeline.sAdd(`rel:${to}`, keys);
+    }
+    await pipeline.exec();
+  }
+  
+  async removeToRelationship(to: string, keys: string | string[]) {
+    const keyArray = Array.isArray(keys) ? keys : [keys];
+    if (keyArray.length) {
+      await this.client.sRem(`rel:${to}`, keyArray);
+    }
+  }
+  
+  async removeRelationship(to: string | string[]) {
+    const keys = Array.isArray(to) ? to : [to];
+    await this.client.del(keys.map(k => `rel:${k}`));
+  }
+}
+```
+
+### Using the Custom Adapter
+
+```typescript
+import { Client } from 'seyfert';
+import { RedisAdapter } from './redis-adapter';
+import { GatewayIntentBits } from 'seyfert/lib/types';
+
+const client = new Client({
+  intents: GatewayIntentBits.Guilds,
+  cache: {
+    adapter: new RedisAdapter('redis://localhost:6379'),
+  },
+});
+```
+
+## Testing Your Adapter
+
+Seyfert provides a built-in test method to validate your adapter:
+
+```typescript
+import { Client } from 'seyfert';
+import { MyCustomAdapter } from './my-adapter';
+
+const client = new Client({
+  cache: {
+    adapter: new MyCustomAdapter(),
+  },
+});
+
+// Test the adapter
+await client.cache.testAdapter();
+// If successful: "The adapter seems to work properly"
+```
+
+The test validates:
+- Basic CRUD operations (create, read, update, delete)
+- Bulk operations
+- Relationship management
+- Different resource types (BaseResource, GuildBasedResource, GuildRelatedResource)
+- Count and flush operations
+
+## Best Practices
+
+<Tip>
+  **Performance**: Implement bulk operations efficiently. Use pipelines or batch operations when available in your storage backend.
+</Tip>
+
+<Warning>
+  **Relationships**: Properly implement relationship methods (`getToRelationship`, `addToRelationship`, etc.). These are critical for resource tracking and cleanup.
+</Warning>
+
+<Note>
+  **Async vs Sync**: Set `isAsync` correctly. Seyfert uses this to determine whether to await operations.
+</Note>
+
+<Tip>
+  **Error Handling**: Implement proper error handling in your adapter. Failed cache operations should not crash the bot.
+</Tip>
+
+## See Also
+
+- [Cache](/api/cache/cache) - Core cache class
+- [Cache Resources](/api/cache/resources) - Resource documentation

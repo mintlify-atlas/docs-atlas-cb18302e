@@ -1,0 +1,548 @@
+---
+title: Components
+description: Handle interactive UI components like buttons, select menus, and modals
+---
+
+## Overview
+
+Seyfert provides a robust system for handling Discord's interactive components: buttons, select menus, and modals. Components allow users to interact with your bot through clicks and selections rather than typing commands.
+
+## Component Types
+
+### Buttons
+
+Clickable buttons attached to messages.
+
+```typescript
+import { ComponentCommand } from 'seyfert';
+import type { ComponentContext } from 'seyfert';
+
+export default class ConfirmButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  
+  // Match specific custom ID
+  customId = 'confirm_action';
+  
+  async run(ctx: ComponentContext<'Button'>) {
+    await ctx.write({
+      content: '✅ Action confirmed!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+**Dynamic Custom IDs with Regex:**
+
+```typescript
+export default class DeleteButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  
+  // Match delete_message_{id}
+  customId = /^delete_message_(\d+)$/;
+  
+  async run(ctx: ComponentContext<'Button'>) {
+    const [, messageId] = ctx.customId.match(this.customId as RegExp)!;
+    
+    await deleteMessage(messageId);
+    await ctx.update({ content: 'Message deleted!' });
+  }
+}
+```
+
+### Select Menus
+
+Dropdown menus for user selection.
+
+#### String Select Menu
+
+```typescript
+import { ComponentCommand } from 'seyfert';
+
+export default class RoleSelect extends ComponentCommand {
+  componentType = 'StringSelectMenu' as const;
+  customId = 'role_select';
+  
+  async run(ctx: ComponentContext<'StringSelectMenu'>) {
+    const selectedRoles = ctx.values; // Array of selected values
+    
+    await ctx.write({
+      content: `You selected: ${selectedRoles.join(', ')}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+#### User Select Menu
+
+```typescript
+export default class MentionUser extends ComponentCommand {
+  componentType = 'UserSelectMenu' as const;
+  customId = 'mention_user';
+  
+  async run(ctx: ComponentContext<'UserSelectMenu'>) {
+    const users = ctx.values; // Array of user IDs
+    
+    await ctx.write({
+      content: `Selected users: ${users.map(id => `<@${id}>`).join(', ')}`
+    });
+  }
+}
+```
+
+#### Role Select Menu
+
+```typescript
+export default class AssignRole extends ComponentCommand {
+  componentType = 'RoleSelectMenu' as const;
+  customId = 'assign_role';
+  
+  async run(ctx: ComponentContext<'RoleSelectMenu'>) {
+    const roleIds = ctx.values;
+    const member = await ctx.member();
+    
+    for (const roleId of roleIds) {
+      await member.roles.add(roleId);
+    }
+    
+    await ctx.write({
+      content: '✅ Roles assigned!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+#### Channel Select Menu
+
+```typescript
+export default class ChooseChannel extends ComponentCommand {
+  componentType = 'ChannelSelectMenu' as const;
+  customId = 'choose_channel';
+  
+  async run(ctx: ComponentContext<'ChannelSelectMenu'>) {
+    const channelIds = ctx.values;
+    
+    await ctx.write({
+      content: `Selected: ${channelIds.map(id => `<#${id}>`).join(', ')}`
+    });
+  }
+}
+```
+
+#### Mentionable Select Menu
+
+```typescript
+export default class MentionableSelect extends ComponentCommand {
+  componentType = 'MentionableSelectMenu' as const;
+  customId = 'mention_select';
+  
+  async run(ctx: ComponentContext<'MentionableSelectMenu'>) {
+    const mentionables = ctx.values; // User or role IDs
+    
+    await ctx.write({
+      content: `Selected: ${mentionables.map(id => `<@&${id}>`).join(', ')}`
+    });
+  }
+}
+```
+
+### Modals
+
+Forms with text input fields.
+
+```typescript
+import { ModalCommand } from 'seyfert';
+import type { ModalContext } from 'seyfert';
+
+export default class FeedbackModal extends ModalCommand {
+  customId = 'feedback_modal';
+  
+  async run(ctx: ModalContext) {
+    // Get input values
+    const title = ctx.fields.getInputValue('feedback_title');
+    const description = ctx.fields.getInputValue('feedback_description');
+    
+    // Process feedback
+    await saveFeedback(title, description);
+    
+    await ctx.write({
+      content: '✅ Thank you for your feedback!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Creating Components
+
+### Building Buttons
+
+```typescript
+import { Button, ActionRow } from 'seyfert';
+import { ButtonStyle } from 'seyfert/types';
+
+// Primary button
+const confirmButton = new Button()
+  .setCustomId('confirm')
+  .setLabel('Confirm')
+  .setStyle(ButtonStyle.Primary);
+
+// Danger button
+const deleteButton = new Button()
+  .setCustomId('delete')
+  .setLabel('Delete')
+  .setStyle(ButtonStyle.Danger)
+  .setEmoji({ name: '🗑️' });
+
+// Link button
+const linkButton = new Button()
+  .setURL('https://discord.com')
+  .setLabel('Learn More')
+  .setStyle(ButtonStyle.Link);
+
+// Disabled button
+const disabledButton = new Button()
+  .setCustomId('disabled')
+  .setLabel('Unavailable')
+  .setStyle(ButtonStyle.Secondary)
+  .setDisabled(true);
+
+// Add to message
+await ctx.write({
+  content: 'Choose an action:',
+  components: [
+    new ActionRow().setComponents([confirmButton, deleteButton])
+  ]
+});
+```
+
+### Building Select Menus
+
+```typescript
+import { StringSelectMenuComponent, ActionRow } from 'seyfert';
+
+const selectMenu = new StringSelectMenuComponent()
+  .setCustomId('color_select')
+  .setPlaceholder('Choose a color')
+  .setMinValues(1)
+  .setMaxValues(3)
+  .setOptions([
+    {
+      label: 'Red',
+      value: 'red',
+      description: 'The color of passion',
+      emoji: { name: '🔴' }
+    },
+    {
+      label: 'Blue',
+      value: 'blue',
+      description: 'The color of calm',
+      emoji: { name: '🔵' }
+    },
+    {
+      label: 'Green',
+      value: 'green',
+      description: 'The color of nature',
+      emoji: { name: '🟢' },
+      default: true // Pre-selected
+    }
+  ]);
+
+await ctx.write({
+  content: 'Pick your favorite colors:',
+  components: [
+    new ActionRow().setComponents([selectMenu])
+  ]
+});
+```
+
+### Building Modals
+
+```typescript
+import { Modal, ActionRow, TextInputComponent } from 'seyfert';
+import { TextInputStyle } from 'seyfert/types';
+
+// Create modal
+const modal = new Modal()
+  .setCustomId('bug_report')
+  .setTitle('Bug Report')
+  .setComponents([
+    new ActionRow<TextInputComponent>().setComponents([
+      new TextInputComponent()
+        .setCustomId('bug_title')
+        .setLabel('Title')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Brief description')
+        .setRequired(true)
+        .setMaxLength(100)
+    ]),
+    new ActionRow<TextInputComponent>().setComponents([
+      new TextInputComponent()
+        .setCustomId('bug_description')
+        .setLabel('Description')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Detailed explanation')
+        .setRequired(true)
+        .setMaxLength(1000)
+    ])
+  ]);
+
+// Show modal (must be in response to interaction)
+await ctx.modal(modal);
+```
+
+## Component Lifecycle
+
+### Filter Components
+
+Add custom validation before running component handlers:
+
+```typescript
+export default class PremiumButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'premium_feature';
+  
+  // Filter who can use this component
+  async filter(ctx: ComponentContext<'Button'>) {
+    const isPremium = await checkPremiumStatus(ctx.author.id);
+    
+    if (!isPremium) {
+      await ctx.write({
+        content: '⭐ This is a premium feature!',
+        flags: MessageFlags.Ephemeral
+      });
+      return false;
+    }
+    
+    return true;
+  }
+  
+  async run(ctx: ComponentContext<'Button'>) {
+    // Only runs if filter returns true
+    await ctx.write({ content: 'Premium feature activated!' });
+  }
+}
+```
+
+### Middlewares
+
+Components support middlewares like commands:
+
+```typescript
+import { ComponentCommand } from 'seyfert';
+import { Middlewares } from 'seyfert/components';
+
+@Middlewares(['adminOnly'])
+export default class AdminButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'admin_action';
+  
+  async run(ctx: ComponentContext<'Button'>) {
+    // Only runs after middleware passes
+  }
+}
+```
+
+### Error Handling
+
+```typescript
+export default class SafeButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'safe_button';
+  
+  async onRunError(ctx: ComponentContext<'Button'>, error: unknown) {
+    console.error('Button error:', error);
+    await ctx.editOrReply({
+      content: '❌ Something went wrong!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+  
+  async onAfterRun(ctx: ComponentContext<'Button'>, error?: unknown) {
+    if (error) {
+      console.log('Component failed');
+    } else {
+      console.log('Component succeeded');
+    }
+  }
+  
+  async run(ctx: ComponentContext<'Button'>) {
+    // Component logic
+  }
+}
+```
+
+## Component Context
+
+The context provides access to interaction data and response methods:
+
+```typescript
+class MyComponent extends ComponentCommand {
+  async run(ctx: ComponentContext<'Button'>) {
+    // Interaction data
+    ctx.interaction;    // Raw interaction
+    ctx.author;         // User who clicked
+    ctx.customId;       // Component custom ID
+    ctx.values;         // Selected values (select menus)
+    ctx.message;        // Message with component
+    ctx.guild;          // Guild (if in guild)
+    ctx.channel;        // Channel
+    
+    // Response methods
+    await ctx.write({ content: 'Response' });           // Reply
+    await ctx.update({ content: 'Updated' });           // Update message
+    await ctx.deferReply();                             // Defer reply
+    await ctx.deferUpdate();                            // Defer update
+    await ctx.editResponse({ content: 'Edit' });        // Edit response
+    await ctx.modal(modal);                             // Show modal
+    
+    // Client access
+    ctx.client;
+  }
+}
+```
+
+## Loading Components
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client();
+
+// Load from directory
+await client.loadComponents('./src/components');
+
+// Or during start
+await client.start({
+  componentsDir: './src/components'
+});
+```
+
+## Example: Pagination
+
+```typescript
+import { Command } from 'seyfert';
+import { Declare } from 'seyfert/commands';
+import { Button, ActionRow } from 'seyfert';
+import { ButtonStyle } from 'seyfert/types';
+
+@Declare({
+  name: 'list',
+  description: 'Show paginated list'
+})
+export default class ListCommand extends Command {
+  async run(ctx: CommandContext) {
+    const items = Array.from({ length: 50 }, (_, i) => `Item ${i + 1}`);
+    const pageSize = 10;
+    const page = 0;
+    
+    await ctx.write({
+      embeds: [this.createEmbed(items, page, pageSize)],
+      components: [this.createButtons(page, Math.ceil(items.length / pageSize))]
+    });
+  }
+  
+  createEmbed(items: string[], page: number, pageSize: number) {
+    const start = page * pageSize;
+    const pageItems = items.slice(start, start + pageSize);
+    
+    return {
+      title: `Items (Page ${page + 1})`,
+      description: pageItems.join('\n')
+    };
+  }
+  
+  createButtons(page: number, totalPages: number) {
+    return new ActionRow().setComponents([
+      new Button()
+        .setCustomId(`list_prev_${page}`)
+        .setLabel('Previous')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(page === 0),
+      new Button()
+        .setCustomId(`list_next_${page}`)
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(page >= totalPages - 1)
+    ]);
+  }
+}
+
+// Previous button handler
+export class ListPrevButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = /^list_prev_(\d+)$/;
+  
+  async run(ctx: ComponentContext<'Button'>) {
+    const [, currentPage] = ctx.customId.match(this.customId as RegExp)!;
+    const page = parseInt(currentPage) - 1;
+    
+    // Update message with new page
+    await ctx.update({
+      embeds: [createEmbed(items, page, 10)],
+      components: [createButtons(page, totalPages)]
+    });
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Unique Custom IDs">
+    Include context in custom IDs to handle state:
+    
+    ```typescript
+    // Good: includes user ID and action
+    customId = `delete_${userId}_${messageId}`
+    
+    // Bad: ambiguous
+    customId = 'delete'
+    ```
+  </Accordion>
+
+  <Accordion title="Handle Timeouts">
+    Components expire after 15 minutes. Handle expired interactions:
+    
+    ```typescript
+    async run(ctx: ComponentContext<'Button'>) {
+      try {
+        await ctx.write({ content: 'Processing...' });
+      } catch (error) {
+        // Interaction may have expired
+        console.log('Component interaction expired');
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Provide User Feedback">
+    Always acknowledge component interactions:
+    
+    ```typescript
+    async run(ctx: ComponentContext<'Button'>) {
+      // Show immediate feedback
+      await ctx.deferUpdate();
+      
+      // Process
+      await longOperation();
+      
+      // Update with result
+      await ctx.editResponse({ content: 'Done!' });
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="/concepts/commands">
+    Build slash commands
+  </Card>
+  <Card title="Events" icon="bolt" href="/concepts/events">
+    Handle Discord events
+  </Card>
+</CardGroup>

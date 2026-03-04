@@ -1,0 +1,457 @@
+---
+title: "Installation"
+description: "Set up Seyfert and start building your Discord bot"
+---
+
+## Prerequisites
+
+Before installing Seyfert, ensure your development environment meets these requirements:
+
+### System Requirements
+
+<CardGroup cols={2}>
+  <Card title="Runtime" icon="gear">
+    - **Node.js**: v18.0.0 or higher (LTS recommended)
+    - **Bun**: Latest version (alternative to Node.js)
+    - **Deno**: v1.30.0 or higher (alternative to Node.js)
+  </Card>
+  
+  <Card title="Package Manager" icon="box">
+    - **npm**: v7+ (comes with Node.js)
+    - **pnpm**: v7+ (recommended)
+    - **yarn**: v1.22+ or v3+
+    - **bun**: Latest version
+  </Card>
+</CardGroup>
+
+<Warning>
+  Node.js v16 is **not recommended**. While it may work with the `--experimental-fetch` flag, use v18+ for best compatibility.
+</Warning>
+
+### Discord Requirements
+
+<Steps>
+  <Step title="Create a Discord Application">
+    1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+    2. Click **New Application**
+    3. Give your application a name and click **Create**
+  </Step>
+  
+  <Step title="Create a Bot User">
+    1. Navigate to the **Bot** tab in your application
+    2. Click **Add Bot** and confirm
+    3. Copy your bot token (you'll need this later)
+  </Step>
+  
+  <Step title="Configure Bot Intents">
+    Enable the intents your bot needs:
+    - **Presence Intent**: For member presence data
+    - **Server Members Intent**: For member join/leave events
+    - **Message Content Intent**: For reading message content
+  </Step>
+</Steps>
+
+<Note>
+  **Never share your bot token!** Treat it like a password. If accidentally exposed, regenerate it immediately in the Discord Developer Portal.
+</Note>
+
+## Installing Seyfert
+
+Choose your preferred package manager:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install seyfert
+    ```
+    
+    Create a new project:
+    ```bash
+    mkdir my-discord-bot
+    cd my-discord-bot
+    npm init -y
+    npm install seyfert
+    npm install -D typescript @types/node
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm add seyfert
+    ```
+    
+    Create a new project:
+    ```bash
+    mkdir my-discord-bot
+    cd my-discord-bot
+    pnpm init
+    pnpm add seyfert
+    pnpm add -D typescript @types/node
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn add seyfert
+    ```
+    
+    Create a new project:
+    ```bash
+    mkdir my-discord-bot
+    cd my-discord-bot
+    yarn init -y
+    yarn add seyfert
+    yarn add -D typescript @types/node
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun add seyfert
+    ```
+    
+    Create a new project:
+    ```bash
+    mkdir my-discord-bot
+    cd my-discord-bot
+    bun init
+    bun add seyfert
+    ```
+    
+    <Note>
+      Bun includes TypeScript support by default, so no additional dev dependencies are needed!
+    </Note>
+  </Tab>
+  
+  <Tab title="deno">
+    ```bash
+    deno add npm:seyfert
+    ```
+    
+    Or import directly in your code:
+    ```typescript
+    import { Client } from "npm:seyfert@^4.2.2";
+    ```
+  </Tab>
+</Tabs>
+
+## Project Setup
+
+### TypeScript Configuration
+
+Create a `tsconfig.json` file in your project root:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+<Warning>
+  The `experimentalDecorators` and `emitDecoratorMetadata` options are **required** for Seyfert's decorator-based command system.
+</Warning>
+
+### Package.json Scripts
+
+Add these scripts to your `package.json`:
+
+```json package.json
+{
+  "name": "my-discord-bot",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "seyfert": "^4.2.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^24.10.0",
+    "tsx": "^4.7.0"
+  }
+}
+```
+
+Install the development dependencies:
+
+<CodeGroup>
+```bash npm
+npm install -D tsx
+```
+
+```bash pnpm
+pnpm add -D tsx
+```
+
+```bash yarn
+yarn add -D tsx
+```
+
+```bash bun
+bun add -D tsx
+```
+</CodeGroup>
+
+### Project Structure
+
+Create the recommended directory structure:
+
+```
+my-discord-bot/
+├── src/
+│   ├── commands/           # Application commands
+│   │   └── ping.ts
+│   ├── events/             # Event handlers
+│   │   └── ready.ts
+│   ├── components/         # Button/Select menu handlers
+│   ├── index.ts            # Entry point
+│   └── seyfert.config.ts   # Seyfert configuration
+├── package.json
+└── tsconfig.json
+```
+
+Create the directories:
+
+```bash
+mkdir -p src/commands src/events src/components
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in your project root:
+
+```bash .env
+DISCORD_TOKEN=your_bot_token_here
+DISCORD_APPLICATION_ID=your_application_id_here
+```
+
+<Warning>
+  Add `.env` to your `.gitignore` to prevent committing secrets:
+  ```bash .gitignore
+  node_modules/
+  dist/
+  .env
+  ```
+</Warning>
+
+### Seyfert Configuration File
+
+Create `src/seyfert.config.ts`:
+
+```typescript src/seyfert.config.ts
+import { config } from 'seyfert';
+import { GatewayIntentBits } from 'seyfert/types';
+
+export default config.bot({
+  token: process.env.DISCORD_TOKEN ?? '',
+  applicationId: process.env.DISCORD_APPLICATION_ID ?? '',
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+  locations: {
+    base: 'src',
+    output: 'dist',
+    commands: 'commands',
+    events: 'events',
+  },
+});
+```
+
+### Understanding Intents
+
+Intents control what events your bot receives. Common intents:
+
+<AccordionGroup>
+  <Accordion title="Guilds" icon="server">
+    **Required for most bots**
+    
+    Enables:
+    - Guild create/update/delete events
+    - Channel create/update/delete events
+    - Role create/update/delete events
+    
+    ```typescript
+    GatewayIntentBits.Guilds
+    ```
+  </Accordion>
+  
+  <Accordion title="Guild Messages" icon="message">
+    **For message-based commands**
+    
+    Enables:
+    - Message create/update/delete events (metadata only)
+    
+    ```typescript
+    GatewayIntentBits.GuildMessages
+    ```
+    
+    <Note>Does not include message content - requires MessageContent intent</Note>
+  </Accordion>
+  
+  <Accordion title="Message Content" icon="text">
+    **Privileged - Requires approval for verified bots**
+    
+    Enables:
+    - Reading actual message content
+    - Required for prefix commands
+    
+    ```typescript
+    GatewayIntentBits.MessageContent
+    ```
+  </Accordion>
+  
+  <Accordion title="Guild Members" icon="users">
+    **Privileged - Requires approval for verified bots**
+    
+    Enables:
+    - Member join/leave events
+    - Member update events
+    - Access to member list
+    
+    ```typescript
+    GatewayIntentBits.GuildMembers
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Use only the intents you need to minimize data your bot receives and improve performance.
+</Tip>
+
+## Verifying Installation
+
+Create a minimal bot to verify everything works:
+
+```typescript src/index.ts
+import { Client } from 'seyfert';
+
+const client = new Client();
+
+client.start().then(() => {
+  console.log('Bot is starting...');
+});
+```
+
+Run your bot:
+
+<CodeGroup>
+```bash npm
+npm run dev
+```
+
+```bash pnpm
+pnpm dev
+```
+
+```bash yarn
+yarn dev
+```
+
+```bash bun
+bun run dev
+```
+</CodeGroup>
+
+You should see output like:
+
+```
+[Seyfert] Starting client...
+[Seyfert] EventHandler loaded
+[Seyfert] #0[YourBotName](123456789) is online...
+```
+
+<Check>
+  If you see this output, congratulations! Seyfert is installed and working correctly.
+</Check>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Module not found errors" icon="triangle-exclamation">
+    **Problem:** `Cannot find module 'seyfert'`
+    
+    **Solutions:**
+    1. Ensure seyfert is installed: `npm install seyfert`
+    2. Delete `node_modules` and reinstall: `rm -rf node_modules && npm install`
+    3. Check your `package.json` includes seyfert in dependencies
+  </Accordion>
+  
+  <Accordion title="Decorator errors" icon="triangle-exclamation">
+    **Problem:** `Experimental support for decorators is a feature...`
+    
+    **Solution:**
+    Ensure your `tsconfig.json` has:
+    ```json
+    {
+      "compilerOptions": {
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Invalid token" icon="triangle-exclamation">
+    **Problem:** `Invalid token provided`
+    
+    **Solutions:**
+    1. Verify your token in `.env` is correct
+    2. Ensure no extra spaces or quotes in the token
+    3. Regenerate the token in Discord Developer Portal if needed
+  </Accordion>
+  
+  <Accordion title="Missing intents" icon="triangle-exclamation">
+    **Problem:** Bot doesn't receive expected events
+    
+    **Solutions:**
+    1. Enable required intents in Discord Developer Portal
+    2. Add corresponding intent bits in your config
+    3. Remember privileged intents require approval for verified bots
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+Now that Seyfert is installed, you're ready to build your bot!
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Follow our step-by-step guide to create your first command
+  </Card>
+  
+  <Card title="Core Concepts" icon="book" href="/concepts/client">
+    Learn about Seyfert's architecture and features
+  </Card>
+  
+  <Card title="Commands" icon="terminal" href="/commands/chat-commands">
+    Dive deep into creating slash commands
+  </Card>
+  
+  <Card title="Events" icon="bolt" href="/concepts/events">
+    Learn how to handle Discord events
+  </Card>
+</CardGroup>

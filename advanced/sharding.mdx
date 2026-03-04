@@ -1,0 +1,318 @@
+---
+title: Sharding
+description: Scale your Discord bot across multiple shards to handle large-scale deployments
+---
+
+Sharding allows your bot to distribute the load of gateway connections across multiple WebSocket connections. This is essential for bots that reach 2,500+ guilds, as Discord requires sharding at that scale.
+
+## Overview
+
+Seyfert's `ShardManager` handles automatic shard creation, connection management, and payload distribution. It supports:
+
+- **Automatic sharding** - Discord recommends the optimal shard count
+- **Concurrency management** - Respects Discord's rate limits for shard spawning
+- **Auto-resharding** - Dynamically adds shards as your bot grows
+- **Shard ranges** - Run specific shard subsets across multiple processes
+
+## Basic Setup
+
+```typescript
+import { ShardManager } from 'seyfert';
+import { GatewayIntentBits } from 'seyfert/types';
+
+const manager = new ShardManager({
+  token: process.env.DISCORD_TOKEN,
+  intents: GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages,
+  info: await fetch('https://discord.com/api/v10/gateway/bot', {
+    headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
+  }).then(r => r.json()),
+  handlePayload: (shardId, payload) => {
+    console.log(`Shard ${shardId} received:`, payload.t);
+  }
+});
+
+await manager.spawnShards();
+```
+
+## Configuration Options
+
+### Core Options
+
+<ParamField path="token" type="string" required>
+  Your Discord bot token
+</ParamField>
+
+<ParamField path="intents" type="number" required>
+  Gateway intents bitfield
+</ParamField>
+
+<ParamField path="info" type="RESTGetAPIGatewayBotResult" required>
+  Gateway bot info from Discord API containing:
+  - `shards` - Recommended shard count
+  - `session_start_limit` - Connection limits and concurrency
+</ParamField>
+
+<ParamField path="handlePayload" type="function" required>
+  Callback function that receives all gateway events:
+  ```typescript
+  (shardId: number, payload: GatewayDispatchPayload) => void
+  ```
+</ParamField>
+
+### Shard Range Configuration
+
+<ParamField path="shardStart" type="number" default="0">
+  First shard ID to spawn (inclusive)
+</ParamField>
+
+<ParamField path="shardEnd" type="number" default="info.shards">
+  Last shard ID to spawn (exclusive)
+</ParamField>
+
+<ParamField path="totalShards" type="number" default="info.shards">
+  Total number of shards across all processes. Used for calculating guild shard IDs.
+</ParamField>
+
+### Advanced Options
+
+<ParamField path="presence" type="function">
+  Function returning initial presence for each shard:
+  ```typescript
+  (shardId: number, workerId: number) => GatewayPresenceUpdateData
+  ```
+</ParamField>
+
+<ParamField path="compress" type="boolean" default="false">
+  Enable zlib-stream compression for gateway payloads
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Enable debug logging
+</ParamField>
+
+## Shard Manager Methods
+
+### Connection Management
+
+```typescript
+// Spawn all configured shards
+await manager.spawnShards();
+
+// Create a specific shard
+const shard = manager.create(0);
+
+// Force a shard to identify
+await manager.forceIdentify(0);
+
+// Disconnect a specific shard
+manager.disconnect(0);
+
+// Disconnect all shards
+manager.disconnectAll();
+```
+
+Source: [src/websocket/discord/sharder.ts:91-234](file:///home/daytona/workspace/source/src/websocket/discord/sharder.ts:91)
+
+### Presence Management
+
+```typescript
+import { ActivityType } from 'seyfert/types';
+
+// Update presence for a specific shard
+manager.setShardPresence(0, {
+  activities: [{
+    name: 'with Seyfert',
+    type: ActivityType.Playing
+  }],
+  status: 'online',
+  afk: false,
+  since: null
+});
+
+// Update presence across all shards
+manager.setPresence({
+  activities: [{
+    name: 'on multiple shards',
+    type: ActivityType.Playing
+  }],
+  status: 'online',
+  afk: false,
+  since: null
+});
+```
+
+Source: [src/websocket/discord/sharder.ts:236-248](file:///home/daytona/workspace/source/src/websocket/discord/sharder.ts:236)
+
+### Voice Connections
+
+```typescript
+// Join a voice channel
+manager.joinVoice(
+  '123456789012345678', // guild_id
+  '987654321098765432', // channel_id
+  {
+    self_deaf: false,
+    self_mute: false
+  }
+);
+
+// Leave voice channel
+manager.leaveVoice('123456789012345678');
+```
+
+Source: [src/websocket/discord/sharder.ts:250-280](file:///home/daytona/workspace/source/src/websocket/discord/sharder.ts:250)
+
+### Shard Utilities
+
+```typescript
+// Calculate which shard a guild belongs to
+const shardId = manager.calculateShardId('123456789012345678');
+
+// Get average latency across all shards
+const avgLatency = manager.latency;
+
+// Access individual shards
+const shard = manager.get(0);
+if (shard) {
+  console.log(`Shard 0 latency: ${shard.latency}ms`);
+  console.log(`Shard 0 is ${shard.isOpen ? 'connected' : 'disconnected'}`);
+}
+```
+
+Source: [src/websocket/discord/sharder.ts:79-89](file:///home/daytona/workspace/source/src/websocket/discord/sharder.ts:79)
+
+## Automatic Resharding
+
+Seyfert can automatically add shards as your bot grows without downtime:
+
+```typescript
+const manager = new ShardManager({
+  // ... other options
+  resharding: {
+    // Check every 24 hours
+    interval: 24 * 60 * 60 * 1000,
+    // Reshard when guilds reach 80% of recommended capacity
+    percentage: 80,
+    // Function to fetch updated gateway info
+    getInfo: async () => {
+      return fetch('https://discord.com/api/v10/gateway/bot', {
+        headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
+      }).then(r => r.json());
+    }
+  }
+});
+```
+
+<Info>
+  Resharding uses the [Discordeno algorithm](https://github.com/discordeno/discordeno/blob/6a5f446c0651b9fad9f1550ff1857fe7a026426b/packages/gateway/src/manager.ts#L106C8-L106C94) to determine when resharding is needed based on guild count vs shard capacity.
+</Info>
+
+Source: [src/websocket/discord/sharder.ts:129-202](file:///home/daytona/workspace/source/src/websocket/discord/sharder.ts:129)
+
+## Distributed Sharding
+
+Run different shard ranges across multiple processes or machines:
+
+**Process 1 - Shards 0-4:**
+```typescript
+const manager1 = new ShardManager({
+  token: process.env.DISCORD_TOKEN,
+  intents: GatewayIntentBits.Guilds,
+  info: gatewayInfo,
+  totalShards: 10,
+  shardStart: 0,
+  shardEnd: 5,
+  handlePayload: handleEvents
+});
+
+await manager1.spawnShards();
+```
+
+**Process 2 - Shards 5-9:**
+```typescript
+const manager2 = new ShardManager({
+  token: process.env.DISCORD_TOKEN,
+  intents: GatewayIntentBits.Guilds,
+  info: gatewayInfo,
+  totalShards: 10,
+  shardStart: 5,
+  shardEnd: 10,
+  handlePayload: handleEvents
+});
+
+await manager2.spawnShards();
+```
+
+<Warning>
+  When using distributed sharding, ensure `totalShards` is identical across all processes. This is critical for correct guild-to-shard routing.
+</Warning>
+
+## Concurrency and Rate Limits
+
+The ShardManager automatically respects Discord's concurrency limits:
+
+```typescript
+// Discord provides this in the gateway/bot response
+const info = {
+  shards: 10,
+  session_start_limit: {
+    total: 1000,
+    remaining: 995,
+    reset_after: 86400000,
+    max_concurrency: 1 // Can identify 1 shard per 5 seconds
+  }
+};
+```
+
+The manager creates **buckets** based on `max_concurrency` and uses a `ConnectQueue` with a 5.5-second delay between identifications.
+
+Source: [src/websocket/discord/sharder.ts:42-127](file:///home/daytona/workspace/source/src/websocket/discord/sharder.ts:42)
+
+## Sending Custom Payloads
+
+```typescript
+import { GatewayOpcodes } from 'seyfert/types';
+
+// Send payload to specific shard
+manager.send(0, {
+  op: GatewayOpcodes.RequestGuildMembers,
+  d: {
+    guild_id: '123456789012345678',
+    query: '',
+    limit: 0
+  }
+});
+```
+
+Source: [src/websocket/discord/sharder.ts:282-291](file:///home/daytona/workspace/source/src/websocket/discord/sharder.ts:282)
+
+## Integration with Client
+
+For most use cases, use the high-level `Client` which manages sharding internally:
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client();
+
+await client.start();
+
+// Access the internal shard manager
+const manager = client.gateway;
+manager.setPresence({ /* ... */ });
+```
+
+<Info>
+  For advanced use cases requiring direct shard control, use `ShardManager` directly. For worker-based multi-process scaling, see [Workers](/advanced/workers).
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Workers" icon="gears" href="/advanced/workers">
+    Scale across multiple processes with WorkerManager
+  </Card>
+  <Card title="Cache Adapters" icon="database" href="/advanced/cache-adapters">
+    Implement custom cache backends
+  </Card>
+</CardGroup>

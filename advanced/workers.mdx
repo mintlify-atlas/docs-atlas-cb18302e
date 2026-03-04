@@ -1,0 +1,539 @@
+---
+title: Worker Processes
+description: Scale your Discord bot across multiple CPU cores and processes using WorkerManager and WorkerClient
+---
+
+Workers enable multi-process architecture for your Discord bot, distributing shards across separate worker processes. This provides better CPU utilization, fault isolation, and scalability compared to single-process sharding.
+
+## Overview
+
+Seyfert's worker system consists of:
+
+- **WorkerManager** - Main process that coordinates workers and handles IPC
+- **WorkerClient** - Client running in each worker process
+- **IPC Communication** - Message passing between manager and workers
+
+Supported worker modes:
+- `threads` - Node.js Worker Threads
+- `clusters` - Node.js Cluster (process forking)
+- `custom` - Custom adapter for alternative environments
+
+## Architecture
+
+```
+┌─────────────────┐
+│  WorkerManager  │ (Main Process)
+│  - Coordinates  │
+│  - Handles API  │
+│  - Manages IPC  │
+└────────┬────────┘
+         │
+    ┌────┴────┬────────┬────────┐
+    │         │        │        │
+┌───▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼───┐
+│Worker0│ │Worker1│ │Worker2│ │Worker3│
+│Shard  │ │Shard  │ │Shard  │ │Shard  │
+│ 0-2   │ │ 3-5   │ │ 6-8   │ │ 9-11 │
+└───────┘ └───────┘ └───────┘ └───────┘
+```
+
+## Quick Start
+
+### Main Process (manager.ts)
+
+```typescript
+import { WorkerManager } from 'seyfert';
+import { GatewayIntentBits } from 'seyfert/types';
+import { resolve } from 'path';
+
+const manager = new WorkerManager({
+  token: process.env.DISCORD_TOKEN!,
+  intents: GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages,
+  info: await fetch('https://discord.com/api/v10/gateway/bot', {
+    headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
+  }).then(r => r.json()),
+  
+  // Path to worker file
+  path: resolve('./worker.js'),
+  
+  // Worker mode
+  mode: 'threads',
+  
+  // Number of shards per worker
+  shardsPerWorker: 3,
+  
+  // Optional: total number of workers (auto-calculated if omitted)
+  workers: 4,
+  
+  // Handle gateway events from all workers
+  handlePayload: async (shardId, workerId, payload) => {
+    console.log(`Worker ${workerId}, Shard ${shardId}:`, payload.t);
+  }
+});
+
+await manager.start();
+console.log('All workers started!');
+```
+
+Source: [src/websocket/discord/workermanager.ts:61-82](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:61)
+
+### Worker Process (worker.ts)
+
+```typescript
+import { WorkerClient } from 'seyfert';
+
+const client = new WorkerClient();
+
+client.start({
+  eventsDir: './events'
+});
+```
+
+Source: [src/client/workerclient.ts:132-169](file:///home/daytona/workspace/source/src/client/workerclient.ts:132)
+
+<Info>
+  The `WorkerClient` automatically receives configuration (token, intents, shard IDs) from the `WorkerManager` via environment variables.
+</Info>
+
+## WorkerManager Configuration
+
+### Required Options
+
+<ParamField path="path" type="string" required>
+  Absolute path to the worker file that will be spawned
+</ParamField>
+
+<ParamField path="mode" type="'threads' | 'clusters' | 'custom'" required>
+  Worker mode:
+  - `threads` - Worker Threads (recommended)
+  - `clusters` - Cluster forking
+  - `custom` - Custom adapter
+</ParamField>
+
+<ParamField path="shardsPerWorker" type="number" required>
+  Number of shards each worker should manage
+</ParamField>
+
+<ParamField path="token" type="string">
+  Discord bot token (can also be provided via runtime config)
+</ParamField>
+
+<ParamField path="intents" type="number">
+  Gateway intents bitfield (can also be provided via runtime config)
+</ParamField>
+
+<ParamField path="info" type="RESTGetAPIGatewayBotResult">
+  Gateway bot info from Discord API. If omitted, automatically fetched.
+</ParamField>
+
+### Optional Options
+
+<ParamField path="workers" type="number">
+  Total number of workers to spawn. Defaults to `Math.ceil(totalShards / shardsPerWorker)`
+</ParamField>
+
+<ParamField path="totalShards" type="number">
+  Total number of shards. Defaults to `info.shards`
+</ParamField>
+
+<ParamField path="shardStart" type="number" default="0">
+  First shard ID (for distributed setups)
+</ParamField>
+
+<ParamField path="shardEnd" type="number" default="totalShards">
+  Last shard ID (for distributed setups)
+</ParamField>
+
+<ParamField path="workerProxy" type="boolean" default="false">
+  Enable API request proxying through the manager (reduces rate limit issues)
+</ParamField>
+
+<ParamField path="debug" type="boolean" default="false">
+  Enable debug logging
+</ParamField>
+
+<ParamField path="compress" type="boolean" default="false">
+  Enable gateway payload compression
+</ParamField>
+
+<ParamField path="handlePayload" type="function">
+  ```typescript
+  (shardId: number, workerId: number, payload: GatewayDispatchPayload) => void
+  ```
+  Receive all gateway events in the manager process
+</ParamField>
+
+<ParamField path="handleWorkerMessage" type="function">
+  ```typescript
+  (message: WorkerMessages) => void
+  ```
+  Intercept IPC messages from workers
+</ParamField>
+
+Source: [src/websocket/discord/workermanager.ts:50-82](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:50)
+
+## WorkerManager Methods
+
+### Worker Communication
+
+```typescript
+// Execute code on a specific worker
+const result = await manager.tellWorker(
+  0, // worker ID
+  (client, vars) => {
+    // This runs in the worker process
+    return {
+      shardCount: client.shards.size,
+      userId: vars.userId
+    };
+  },
+  { userId: '123456789' } // variables passed to the function
+);
+
+// Execute code on all workers
+const results = await manager.tellWorkers(
+  (client, vars) => {
+    return client.guilds.cache.count('guild');
+  },
+  {}
+);
+
+console.log('Total guilds:', results.reduce((a, b) => a + b, 0));
+```
+
+Source: [src/websocket/discord/workermanager.ts:572-593](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:572)
+
+### Shard Information
+
+```typescript
+// Get info about a specific shard
+const shardInfo = await manager.getShardInfo(5);
+console.log(shardInfo);
+// {
+//   shardId: 5,
+//   workerId: 1,
+//   latency: 45,
+//   open: true,
+//   resumable: true
+// }
+
+// Get info about all shards in a worker
+const workerInfo = await manager.getWorkerInfo(1);
+console.log(workerInfo);
+// {
+//   workerId: 1,
+//   shards: [
+//     { shardId: 3, latency: 42, open: true, ... },
+//     { shardId: 4, latency: 38, open: true, ... },
+//     { shardId: 5, latency: 45, open: true, ... }
+//   ]
+// }
+```
+
+Source: [src/websocket/discord/workermanager.ts:543-570](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:543)
+
+### Sending Gateway Payloads
+
+```typescript
+import { GatewayOpcodes } from 'seyfert/types';
+
+// Send payload to a specific shard
+await manager.send(
+  {
+    op: GatewayOpcodes.RequestGuildMembers,
+    d: {
+      guild_id: '123456789012345678',
+      query: '',
+      limit: 0
+    }
+  },
+  5 // shard ID
+);
+```
+
+Source: [src/websocket/discord/workermanager.ts:523-541](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:523)
+
+### Utilities
+
+```typescript
+// Calculate which worker manages a shard
+const workerId = manager.calculateWorkerId(5);
+
+// Calculate which shard a guild belongs to
+const shardId = manager.calculateShardId('123456789012345678');
+
+// Get average latency for a worker
+const latency = await manager.syncLatency({ workerId: 0 });
+
+// Get latency for a specific shard
+const shardLatency = await manager.syncLatency({ shardId: 5 });
+```
+
+Source: [src/websocket/discord/workermanager.ts:120-163](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:120)
+
+## WorkerClient API
+
+The `WorkerClient` extends `BaseClient` with worker-specific features.
+
+### Worker-Specific Methods
+
+```typescript
+import { WorkerClient } from 'seyfert';
+
+const client = new WorkerClient();
+
+// Access worker metadata
+console.log(`Worker ID: ${client.workerId}`);
+console.log(`Managing shards:`, client.workerData.shards);
+console.log(`Total shards: ${client.workerData.totalShards}`);
+
+// Calculate shard for a guild
+const shardId = client.calculateShardId('123456789012345678');
+
+// Access individual shards
+for (const [id, shard] of client.shards) {
+  console.log(`Shard ${id}: ${shard.latency}ms`);
+}
+
+// Average latency across this worker's shards
+console.log(`Worker latency: ${client.latency}ms`);
+```
+
+Source: [src/client/workerclient.ts:97-107](file:///home/daytona/workspace/source/src/client/workerclient.ts:97)
+
+### Cross-Worker Communication
+
+```typescript
+// Execute code on another worker from within a worker
+const result = await client.tellWorker(
+  2, // target worker ID
+  (client, vars) => {
+    return client.guilds.cache.get(`guild.${vars.guildId}`);
+  },
+  { guildId: '123456789' }
+);
+
+// Execute code on all workers
+const results = await client.tellWorkers(
+  (client, vars) => client.shards.size,
+  {}
+);
+```
+
+Source: [src/client/workerclient.ts:424-443](file:///home/daytona/workspace/source/src/client/workerclient.ts:424)
+
+### Worker Events
+
+Workers emit special lifecycle events:
+
+```typescript
+import { createEvent } from 'seyfert';
+
+// When all shards in this worker are connected
+export default createEvent({
+  data: { name: 'WORKER_SHARDS_CONNECTED' },
+  run: (user, client, shardId) => {
+    console.log(`Worker ${client.workerId} shards connected`);
+  }
+});
+
+// When all shards in this worker are ready
+export default createEvent({
+  data: { name: 'WORKER_READY' },
+  run: (user, client, shardId) => {
+    console.log(`Worker ${client.workerId} is ready`);
+  }
+});
+
+// When ALL workers are ready (fired on first worker only)
+export default createEvent({
+  data: { name: 'BOT_READY' },
+  run: (user, client, shardId) => {
+    console.log('Entire bot is ready!');
+  }
+});
+```
+
+Source: [src/client/workerclient.ts:535-560](file:///home/daytona/workspace/source/src/client/workerclient.ts:535)
+
+## Advanced Features
+
+### Custom Cache Adapter
+
+Workers can use shared cache through the manager:
+
+```typescript
+import { WorkerManager } from 'seyfert';
+import { RedisAdapter } from './redis-adapter';
+
+const manager = new WorkerManager({
+  // ... options
+});
+
+// Set a custom cache adapter
+const redis = new RedisAdapter();
+manager.setCache(redis);
+
+await manager.start();
+```
+
+Source: [src/websocket/discord/workermanager.ts:84-86](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:84)
+
+### API Request Proxying
+
+Prevent rate limit issues by routing all API requests through the manager:
+
+```typescript
+const manager = new WorkerManager({
+  // ... options
+  workerProxy: true // Enable API proxying
+});
+```
+
+With `workerProxy: true`, workers send API requests to the manager via IPC instead of making direct HTTP calls. The manager handles rate limiting centrally.
+
+Source: [src/websocket/discord/workermanager.ts:455-471](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:455)
+
+### Automatic Resharding
+
+Just like `ShardManager`, workers support automatic resharding:
+
+```typescript
+const manager = new WorkerManager({
+  // ... options
+  resharding: {
+    interval: 24 * 60 * 60 * 1000, // Check daily
+    percentage: 80, // Reshard at 80% capacity
+    getInfo: async () => {
+      return fetch('https://discord.com/api/v10/gateway/bot', {
+        headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
+      }).then(r => r.json());
+    }
+  }
+});
+```
+
+Resharding spawns new workers with updated shard counts, then gracefully transitions from old workers once ready.
+
+Source: [src/websocket/discord/workermanager.ts:646-678](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:646)
+
+### Custom Worker Adapter
+
+Implement custom worker spawning for alternative environments:
+
+```typescript
+import type { WorkerData } from 'seyfert';
+
+const manager = new WorkerManager({
+  mode: 'custom',
+  adapter: {
+    spawn(workerData: WorkerData, env: Record<string, any>) {
+      // Spawn worker in your custom environment
+      // env contains SEYFERT_WORKER_* environment variables
+    },
+    postMessage(workerId: number, message: any) {
+      // Send message to worker
+    }
+  },
+  // ... other options
+});
+```
+
+Source: [src/websocket/discord/workermanager.ts:165-179](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:165)
+
+### Heartbeat Monitoring
+
+The manager automatically monitors worker health:
+
+```typescript
+const manager = new WorkerManager({
+  // ... options
+  heartbeaterInterval: 15000 // Check every 15 seconds (default)
+});
+```
+
+If a worker fails to respond to heartbeats, the manager automatically restarts it.
+
+Source: [src/websocket/discord/workermanager.ts:59-82](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:59)
+
+## IPC Message Flow
+
+The manager and workers communicate via typed IPC messages:
+
+**Manager → Worker:**
+- `SPAWN_SHARDS` - Initialize shards
+- `ALLOW_CONNECT` - Permission to connect a shard
+- `SEND_PAYLOAD` - Send gateway payload
+- `SHARD_INFO` / `WORKER_INFO` - Request shard data
+- `EXECUTE_EVAL` - Run code in worker
+- `HEARTBEAT` - Health check
+
+**Worker → Manager:**
+- `WORKER_START` - Worker initialized
+- `WORKER_READY` - All shards ready
+- `CONNECT_QUEUE` - Request to connect shard
+- `RECEIVE_PAYLOAD` - Forward gateway event
+- `CACHE_REQUEST` - Request cache operation
+- `WORKER_API_REQUEST` - Proxied API request
+- `ACK_HEARTBEAT` - Heartbeat response
+
+Source: [src/websocket/discord/workermanager.ts:289-504](file:///home/daytona/workspace/source/src/websocket/discord/workermanager.ts:289)
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Choose the right shardsPerWorker">
+    - **Small bots (< 1,000 guilds):** 1-2 workers with all shards
+    - **Medium bots (1,000-10,000 guilds):** 3-5 shards per worker
+    - **Large bots (10,000+ guilds):** 2-3 shards per worker
+    
+    More workers = better CPU utilization but more overhead
+  </Accordion>
+  
+  <Accordion title="Use workerProxy for large bots">
+    Enable `workerProxy: true` to centralize rate limiting and prevent 429 errors when workers make many API requests.
+  </Accordion>
+  
+  <Accordion title="Monitor worker health">
+    The built-in heartbeat system handles worker crashes, but consider logging worker restarts:
+    
+    ```typescript
+    handleWorkerMessage: (message) => {
+      if (message.type === 'WORKER_READY') {
+        console.log(`Worker ${message.workerId} (re)started`);
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle worker-specific state carefully">
+    Remember that each worker has its own memory space. Avoid storing critical state in-memory - use shared cache or databases instead.
+  </Accordion>
+</AccordionGroup>
+
+## Comparison: Workers vs Sharding
+
+| Feature | ShardManager | WorkerManager |
+|---------|-------------|---------------|
+| **Process Model** | Single process | Multi-process |
+| **CPU Utilization** | Single core | Multiple cores |
+| **Memory Isolation** | Shared memory | Isolated per worker |
+| **Fault Tolerance** | Shard crash affects all | Worker crash isolated |
+| **Complexity** | Lower | Higher |
+| **IPC Overhead** | None | Message passing |
+| **Best For** | Small-medium bots | Large-scale bots |
+
+<Info>
+  For most bots under 10,000 guilds, `ShardManager` is simpler and sufficient. Use `WorkerManager` when you need better CPU utilization or fault isolation.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sharding" icon="server" href="/advanced/sharding">
+    Learn about single-process sharding
+  </Card>
+  <Card title="Cache Adapters" icon="database" href="/advanced/cache-adapters">
+    Share cache across workers
+  </Card>
+</CardGroup>

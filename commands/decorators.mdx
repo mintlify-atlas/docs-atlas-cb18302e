@@ -1,0 +1,535 @@
+---
+title: "Command Decorators"
+description: "Use decorators to configure and enhance your commands"
+---
+
+## Overview
+
+Seyfert uses TypeScript decorators to configure commands in a clean, declarative way. Decorators provide metadata and configuration for commands, subcommands, options, and middleware.
+
+## Available Decorators
+
+### @Declare
+
+The `@Declare` decorator is required for all commands and defines core command properties.
+
+```typescript
+import { Command, Declare } from 'seyfert';
+
+@Declare({
+  name: 'ping',
+  description: 'Check bot latency',
+  nsfw: false,
+  defaultMemberPermissions: 'Administrator',
+  botPermissions: 'SendMessages',
+  guildId: ['123456789012345678'],
+  integrationTypes: ['GuildInstall', 'UserInstall'],
+  contexts: ['Guild', 'BotDM', 'PrivateChannel'],
+  aliases: ['pong', 'latency'],
+  props: { category: 'utility' }
+})
+export default class PingCommand extends Command {
+  async run(ctx: CommandContext) {
+    await ctx.write({ content: 'Pong!' });
+  }
+}
+```
+
+#### Properties
+
+- **name** (required): Command name
+- **description** (required for chat commands): Command description
+- **nsfw**: Whether the command is age-restricted
+- **defaultMemberPermissions**: Required user permissions (string or bigint)
+- **botPermissions**: Required bot permissions (string or bigint)
+- **guildId**: Array of guild IDs where command is available
+- **integrationTypes**: Installation contexts (`GuildInstall`, `UserInstall`)
+- **contexts**: Usage contexts (`Guild`, `BotDM`, `PrivateChannel`)
+- **aliases**: Alternative command names (for message commands)
+- **props**: Custom properties for your use
+- **ignore**: Ignore command type (`IgnoreCommand.Slash` or `IgnoreCommand.Message`)
+
+### @Options
+
+Defines command options/parameters.
+
+```typescript
+import { Command, Declare, Options, createStringOption, createUserOption } from 'seyfert';
+
+@Declare({
+  name: 'ban',
+  description: 'Ban a user'
+})
+@Options({
+  user: createUserOption({
+    description: 'User to ban',
+    required: true
+  }),
+  reason: createStringOption({
+    description: 'Reason for ban',
+    required: false,
+    max_length: 512
+  }),
+  days: createIntegerOption({
+    description: 'Days of messages to delete',
+    required: false,
+    min_value: 0,
+    max_value: 7
+  })
+})
+export default class BanCommand extends Command {
+  async run(ctx: CommandContext<typeof BanCommand.options>) {
+    const { user, reason, days } = ctx.options;
+    // Implementation
+  }
+}
+```
+
+#### For Subcommands
+
+```typescript
+import { SubCommand, Declare, Options } from 'seyfert';
+
+@Declare({
+  name: 'info',
+  description: 'Get user information'
+})
+@Options({
+  user: createUserOption({
+    description: 'Target user',
+    required: false
+  })
+})
+export default class UserInfoSubCommand extends SubCommand {
+  async run(ctx: CommandContext<typeof UserInfoSubCommand.options>) {
+    const user = ctx.options.user ?? ctx.author;
+    // Implementation
+  }
+}
+```
+
+#### For Subcommand Classes
+
+```typescript
+import { Command, Declare, Options } from 'seyfert';
+import UserInfoSub from './user-info.sub';
+import UserAvatarSub from './user-avatar.sub';
+
+@Declare({
+  name: 'user',
+  description: 'User commands'
+})
+@Options([UserInfoSub, UserAvatarSub])
+export default class UserCommand extends Command {}
+```
+
+### @Middlewares
+
+Attaches middleware to commands.
+
+```typescript
+import { Command, Declare, Middlewares } from 'seyfert';
+
+@Declare({
+  name: 'admin',
+  description: 'Admin only command'
+})
+@Middlewares(['AdminOnly', 'LogCommand'])
+export default class AdminCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Middleware runs before this
+  }
+}
+```
+
+<Note>
+  Middleware names must be registered in your `RegisteredMiddlewares` interface.
+</Note>
+
+### @Groups
+
+Defines subcommand groups for complex commands.
+
+```typescript
+import { Command, Declare, Groups, Options } from 'seyfert';
+
+@Declare({
+  name: 'config',
+  description: 'Configuration commands'
+})
+@Groups({
+  channel: {
+    defaultDescription: 'Channel configuration',
+    name: [['es-ES', 'canal']],
+    description: [['es-ES', 'Configuración de canales']],
+    aliases: ['ch']
+  },
+  role: {
+    defaultDescription: 'Role configuration',
+    aliases: ['r']
+  }
+})
+@Options([ChannelSetSub, ChannelRemoveSub, RoleSetSub, RoleRemoveSub])
+export default class ConfigCommand extends Command {}
+```
+
+### @Group
+
+Assigns a subcommand to a group.
+
+```typescript
+import { SubCommand, Declare, Group } from 'seyfert';
+
+@Declare({
+  name: 'set',
+  description: 'Set channel configuration'
+})
+@Group('channel')
+export default class ChannelSetSub extends SubCommand {
+  async run(ctx: CommandContext) {
+    // /config channel set
+  }
+}
+```
+
+### @AutoLoad
+
+Automatically loads all subcommands from the same directory.
+
+```typescript
+import { Command, Declare, AutoLoad } from 'seyfert';
+
+@Declare({
+  name: 'moderation',
+  description: 'Moderation commands'
+})
+@AutoLoad()
+export default class ModerationCommand extends Command {}
+```
+
+**Directory structure:**
+```
+commands/
+  moderation.ts        (parent command with @AutoLoad)
+  ban.sub.ts          (automatically loaded)
+  kick.sub.ts         (automatically loaded)
+  timeout.sub.ts      (automatically loaded)
+  warn.sub.ts         (automatically loaded)
+```
+
+<Warning>
+  Don't use `@Options` when using `@AutoLoad` - subcommands are discovered automatically.
+</Warning>
+
+### @Locales
+
+Adds localized command names and descriptions.
+
+```typescript
+import { Command, Declare, Locales } from 'seyfert';
+import { Locale } from 'seyfert/types';
+
+@Declare({
+  name: 'help',
+  description: 'Get help'
+})
+@Locales({
+  name: [
+    [Locale.SpanishES, 'ayuda'],
+    [Locale.French, 'aide'],
+    [Locale.German, 'hilfe']
+  ],
+  description: [
+    [Locale.SpanishES, 'Obtener ayuda'],
+    [Locale.French, 'Obtenir de l\'aide'],
+    [Locale.German, 'Hilfe erhalten']
+  ]
+})
+export default class HelpCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Implementation
+  }
+}
+```
+
+### @LocalesT
+
+Uses your i18n system for translations.
+
+```typescript
+import { Command, Declare, LocalesT } from 'seyfert';
+
+@Declare({
+  name: 'profile',
+  description: 'View user profile'
+})
+@LocalesT('commands.profile.name', 'commands.profile.description')
+export default class ProfileCommand extends Command {
+  async run(ctx: CommandContext) {
+    const t = ctx.t; // Access translations
+    await ctx.write({ content: t('profile.message') });
+  }
+}
+```
+
+### @GroupsT
+
+Uses i18n for group localizations.
+
+```typescript
+import { Command, Declare, GroupsT } from 'seyfert';
+
+@Declare({
+  name: 'settings',
+  description: 'Bot settings'
+})
+@GroupsT({
+  user: {
+    name: 'settings.groups.user.name',
+    description: 'settings.groups.user.description',
+    defaultDescription: 'User settings'
+  },
+  server: {
+    name: 'settings.groups.server.name',
+    description: 'settings.groups.server.description',
+    defaultDescription: 'Server settings'
+  }
+})
+export default class SettingsCommand extends Command {}
+```
+
+## Combining Decorators
+
+Decorators can be stacked to configure commands fully:
+
+```typescript
+import { 
+  Command, 
+  Declare, 
+  Options, 
+  Middlewares, 
+  Locales,
+  createStringOption,
+  createBooleanOption
+} from 'seyfert';
+import { Locale } from 'seyfert/types';
+
+@Declare({
+  name: 'announce',
+  description: 'Make an announcement',
+  defaultMemberPermissions: 'ManageGuild',
+  botPermissions: ['SendMessages', 'EmbedLinks'],
+  contexts: ['Guild']
+})
+@Locales({
+  name: [
+    [Locale.SpanishES, 'anunciar'],
+    [Locale.French, 'annoncer']
+  ],
+  description: [
+    [Locale.SpanishES, 'Hacer un anuncio'],
+    [Locale.French, 'Faire une annonce']
+  ]
+})
+@Options({
+  message: createStringOption({
+    description: 'Announcement message',
+    required: true,
+    min_length: 1,
+    max_length: 2000
+  }),
+  everyone: createBooleanOption({
+    description: 'Ping @everyone',
+    required: false
+  })
+})
+@Middlewares(['LogCommand', 'RateLimiter'])
+export default class AnnounceCommand extends Command {
+  async run(ctx: CommandContext<typeof AnnounceCommand.options>) {
+    const { message, everyone } = ctx.options;
+    
+    await ctx.write({
+      content: everyone ? `@everyone\n${message}` : message,
+      allowed_mentions: { parse: everyone ? ['everyone'] : [] }
+    });
+  }
+}
+```
+
+## Context Menu Command Decorators
+
+Context menu commands use a simpler decorator setup:
+
+```typescript
+import { ContextMenuCommand, Declare } from 'seyfert';
+import { ApplicationCommandType } from 'seyfert/types';
+
+@Declare({
+  name: 'Get User Avatar',
+  type: ApplicationCommandType.User,
+  defaultMemberPermissions: 'SendMessages'
+})
+export default class AvatarMenuCommand extends ContextMenuCommand {
+  async run(ctx: MenuCommandContext<UserCommandInteraction>) {
+    const user = ctx.target;
+    await ctx.write({ content: user.avatarURL({ size: 2048 }) });
+  }
+}
+```
+
+## Custom Decorator Pattern
+
+Create reusable decorator combinations:
+
+```typescript
+// utils/decorators.ts
+import { Declare, Middlewares } from 'seyfert';
+
+export function AdminCommand(name: string, description: string) {
+  return function(target: any) {
+    Declare({
+      name,
+      description,
+      defaultMemberPermissions: 'Administrator',
+      contexts: ['Guild']
+    })(target);
+    
+    Middlewares(['AdminOnly', 'LogCommand'])(target);
+  };
+}
+
+// Usage
+import { Command } from 'seyfert';
+import { AdminCommand } from './utils/decorators';
+
+@AdminCommand('purge', 'Delete messages')
+export default class PurgeCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Implementation
+  }
+}
+```
+
+## Decorator Order
+
+Decorators are applied bottom-to-top, but the order generally doesn't matter for Seyfert's built-in decorators:
+
+```typescript
+// Both are equivalent
+@Declare({ name: 'cmd', description: 'desc' })
+@Options({ /* ... */ })
+@Middlewares(['M1'])
+export default class MyCommand extends Command {}
+
+@Middlewares(['M1'])
+@Options({ /* ... */ })
+@Declare({ name: 'cmd', description: 'desc' })
+export default class MyCommand extends Command {}
+```
+
+<Tip>
+  For consistency, use this order: `@Declare`, `@Locales`/`@LocalesT`, `@Groups`/`@Group`, `@Options`, `@Middlewares`, `@AutoLoad`
+</Tip>
+
+## Type Safety
+
+Decorators maintain full type safety:
+
+```typescript
+@Options({
+  count: createIntegerOption({
+    description: 'Number of items',
+    required: true
+  })
+})
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<typeof MyCommand.options>) {
+    const count = ctx.options.count; // Type: number
+    // count is guaranteed to exist and be a number
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep Decorators Clean">
+    Use decorators for configuration, not complex logic:
+    
+    ```typescript
+    // Good
+    @Declare({
+      name: 'ban',
+      description: 'Ban a user',
+      defaultMemberPermissions: 'BanMembers'
+    })
+    
+    // Bad - complex logic in decorator
+    @Declare({
+      name: 'ban',
+      description: 'Ban a user',
+      defaultMemberPermissions: (() => {
+        const perms = calculatePermissions();
+        return perms;
+      })()
+    })
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Type Inference">
+    Let TypeScript infer option types:
+    
+    ```typescript
+    @Options({
+      user: createUserOption({ /* ... */ })
+    })
+    export default class MyCommand extends Command {
+      async run(ctx: CommandContext<typeof MyCommand.options>) {
+        // ctx.options.user is correctly typed
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Organize Large Commands">
+    For commands with many subcommands, use `@AutoLoad` instead of listing each one:
+    
+    ```typescript
+    // Instead of
+    @Options([Sub1, Sub2, Sub3, /* ... */, Sub20])
+    
+    // Use
+    @AutoLoad()
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate Permissions Early">
+    Set permissions in `@Declare` to let Discord handle validation:
+    
+    ```typescript
+    @Declare({
+      name: 'kick',
+      description: 'Kick a member',
+      defaultMemberPermissions: 'KickMembers',
+      botPermissions: 'KickMembers'
+    })
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat Commands" icon="comments" href="/commands/chat-commands">
+    Learn about command structure
+  </Card>
+  <Card title="Options" icon="sliders" href="/commands/options">
+    Define command parameters
+  </Card>
+  <Card title="Middleware" icon="filter" href="/commands/middleware">
+    Add middleware to commands
+  </Card>
+  <Card title="Localization" icon="language" href="/guides/localization">
+    Implement i18n for commands
+  </Card>
+</CardGroup>

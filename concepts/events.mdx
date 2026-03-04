@@ -1,0 +1,436 @@
+---
+title: Event System
+description: Handle Discord gateway events in Seyfert
+---
+
+## Overview
+
+Seyfert's event system allows you to listen to and handle Discord gateway events. Events are automatically loaded from your configured directory and executed when Discord sends the corresponding gateway payload.
+
+<Warning>
+  Events are only available in `Client` and `WorkerClient`. The `HttpClient` does not support events as it has no gateway connection.
+</Warning>
+
+## Creating Events
+
+Use the `createEvent` helper to create type-safe event handlers.
+
+### Basic Event
+
+```typescript
+import { createEvent } from 'seyfert';
+
+export default createEvent({
+  data: { name: 'messageCreate' },
+  async run(message, client, shardId) {
+    console.log(`[Shard ${shardId}] Message from ${message.author.username}: ${message.content}`);
+  }
+});
+```
+
+### Guild Member Event
+
+```typescript
+import { createEvent } from 'seyfert';
+
+export default createEvent({
+  data: { name: 'guildMemberAdd' },
+  async run(member, client, shardId) {
+    const guild = await member.guild();
+    
+    // Send welcome message
+    const channel = await guild.channels.fetch('welcome-channel-id');
+    await channel.messages.write({
+      content: `Welcome ${member.user.username} to ${guild.name}! 🎉`
+    });
+  }
+});
+```
+
+### Ready Event
+
+```typescript
+import { createEvent } from 'seyfert';
+
+export default createEvent({
+  data: { name: 'botReady', once: true },
+  async run(user, client, shardId) {
+    client.logger.info(`Bot ready as ${user.username}`);
+    
+    // Upload commands after bot is ready
+    await client.uploadCommands();
+  }
+});
+```
+
+## Event Types
+
+### Gateway Events
+
+Seyfert supports all Discord gateway events:
+
+<AccordionGroup>
+  <Accordion title="Guild Events">
+    - `guildCreate` - Bot joins a guild or guild becomes available
+    - `guildUpdate` - Guild settings update
+    - `guildDelete` - Bot leaves a guild or guild becomes unavailable
+    - `guildMemberAdd` - User joins a guild
+    - `guildMemberUpdate` - Member properties update
+    - `guildMemberRemove` - Member leaves or is kicked
+    - `guildBanAdd` - User is banned
+    - `guildBanRemove` - User is unbanned
+    - `guildRoleCreate` - Role is created
+    - `guildRoleUpdate` - Role is updated
+    - `guildRoleDelete` - Role is deleted
+    - `guildEmojisUpdate` - Guild emojis are updated
+    - `guildStickersUpdate` - Guild stickers are updated
+  </Accordion>
+
+  <Accordion title="Channel Events">
+    - `channelCreate` - Channel is created
+    - `channelUpdate` - Channel settings update
+    - `channelDelete` - Channel is deleted
+    - `channelPinsUpdate` - Pinned messages change
+    - `threadCreate` - Thread is created
+    - `threadUpdate` - Thread is updated
+    - `threadDelete` - Thread is deleted
+    - `threadListSync` - Thread list synced
+    - `threadMemberUpdate` - Thread member is updated
+    - `threadMembersUpdate` - Thread members are updated
+  </Accordion>
+
+  <Accordion title="Message Events">
+    - `messageCreate` - Message is created
+    - `messageUpdate` - Message is edited
+    - `messageDelete` - Message is deleted
+    - `messageDeleteBulk` - Multiple messages deleted
+    - `messageReactionAdd` - Reaction added to message
+    - `messageReactionRemove` - Reaction removed from message
+    - `messageReactionRemoveAll` - All reactions removed
+    - `messageReactionRemoveEmoji` - All of one emoji removed
+  </Accordion>
+
+  <Accordion title="Voice Events">
+    - `voiceStateUpdate` - Voice state changes
+    - `voiceServerUpdate` - Voice server updates
+  </Accordion>
+
+  <Accordion title="Interaction Events">
+    - `interactionCreate` - Any interaction is created
+  </Accordion>
+
+  <Accordion title="Presence Events">
+    - `presenceUpdate` - User's presence updates (requires intent)
+  </Accordion>
+
+  <Accordion title="User Events">
+    - `userUpdate` - Current user settings update
+  </Accordion>
+
+  <Accordion title="Stage Events">
+    - `stageInstanceCreate` - Stage instance created
+    - `stageInstanceUpdate` - Stage instance updated
+    - `stageInstanceDelete` - Stage instance deleted
+  </Accordion>
+</AccordionGroup>
+
+### Special Seyfert Events
+
+**`botReady`** - Fired when all shards are ready
+```typescript
+createEvent({
+  data: { name: 'botReady', once: true },
+  async run(user, client, shardId) {
+    console.log('All shards ready!');
+  }
+});
+```
+
+**`raw`** - Receive all raw gateway payloads
+```typescript
+createEvent({
+  data: { name: 'raw' },
+  async run(payload, client, shardId) {
+    console.log('Gateway event:', payload.t);
+  }
+});
+```
+
+**Worker-specific events** (WorkerClient only):
+- `workerReady` - Worker has connected all its shards
+- `workerShardsConnected` - Worker shards are connected
+
+## Event Data
+
+### Once Flag
+
+The `once` flag makes an event handler run only once:
+
+```typescript
+export default createEvent({
+  data: { name: 'guildCreate', once: true },
+  run(guild, client, shardId) {
+    // Only runs for the first guild create event
+  }
+});
+```
+
+### Shard ID
+
+All events receive the `shardId` that handled the event:
+
+```typescript
+export default createEvent({
+  data: { name: 'messageCreate' },
+  run(message, client, shardId) {
+    console.log(`Handled by shard ${shardId}`);
+    console.log(`Total shards: ${client.gateway.totalShards}`);
+  }
+});
+```
+
+## Event Handler
+
+The `EventHandler` manages all event listeners.
+
+### Loading Events
+
+```typescript
+import { Client } from 'seyfert';
+
+const client = new Client();
+
+// Load from directory
+await client.loadEvents('./src/events');
+
+// Or during start
+await client.start({
+  eventsDir: './src/events'
+});
+```
+
+### Programmatic Registration
+
+```typescript
+client.events.set([
+  {
+    data: { name: 'messageCreate', once: false },
+    run: async (message, client, shardId) => {
+      console.log('Message:', message.content);
+    }
+  }
+]);
+```
+
+### Custom Events
+
+Create your own custom events:
+
+```typescript
+// types.ts
+declare module 'seyfert' {
+  interface CustomEvents {
+    levelUp: (userId: string, level: number) => void;
+  }
+}
+
+// event.ts
+import { createEvent } from 'seyfert';
+
+export default createEvent({
+  data: { name: 'levelUp' },
+  run(userId, level, client, shardId) {
+    console.log(`User ${userId} reached level ${level}!`);
+  }
+});
+
+// Emit the custom event
+client.events.runEvent('levelUp', client, userId, level, shardId);
+```
+
+## Event Context
+
+Each event receives specific data based on the event type:
+
+```typescript
+// Message events
+createEvent({
+  data: { name: 'messageCreate' },
+  run(message, client, shardId) {
+    message.author;     // User who sent message
+    message.content;    // Message content
+    message.channel;    // Channel where sent
+    message.guild;      // Guild (if in guild)
+    message.mentions;   // Mentioned users/roles
+  }
+});
+
+// Guild member events
+createEvent({
+  data: { name: 'guildMemberAdd' },
+  async run(member, client, shardId) {
+    member.user;        // User object
+    member.guild();     // Fetch guild
+    member.roles;       // Member's roles
+    member.joinedAt;    // When they joined
+  }
+});
+
+// Interaction events
+createEvent({
+  data: { name: 'interactionCreate' },
+  run(interaction, client, shardId) {
+    interaction.user;           // User who triggered
+    interaction.isCommand();    // Check if command
+    interaction.isButton();     // Check if button
+    interaction.isStringSelectMenu(); // Check select menu
+  }
+});
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Handle Errors">
+    Always wrap event logic in try-catch to prevent crashes:
+    
+    ```typescript
+    export default createEvent({
+      data: { name: 'messageCreate' },
+      async run(message, client, shardId) {
+        try {
+          // Event logic
+          await processMessage(message);
+        } catch (error) {
+          client.logger.error('Error in messageCreate:', error);
+        }
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Use Proper Intents">
+    Ensure you have the required gateway intents:
+    
+    ```typescript
+    import { GatewayIntentBits } from 'seyfert/types';
+    
+    const client = new Client();
+    
+    await client.start({
+      connection: {
+        intents: [
+          GatewayIntentBits.Guilds,
+          GatewayIntentBits.GuildMessages,
+          GatewayIntentBits.MessageContent, // For message.content
+          GatewayIntentBits.GuildMembers    // For member events
+        ]
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Optimize Event Handlers">
+    - Avoid heavy operations in frequently-fired events
+    - Use caching to reduce API calls
+    - Defer non-critical work
+    
+    ```typescript
+    createEvent({
+      data: { name: 'messageCreate' },
+      async run(message, client, shardId) {
+        // Quick check first
+        if (message.author.bot) return;
+        
+        // Then process
+        await processMessage(message);
+      }
+    });
+    ```
+  </Accordion>
+
+  <Accordion title="Organize Event Files">
+    Structure your events directory:
+    
+    ```
+    src/events/
+    ├── ready.ts
+    ├── messages/
+    │   ├── messageCreate.ts
+    │   ├── messageDelete.ts
+    │   └── messageUpdate.ts
+    ├── guilds/
+    │   ├── guildCreate.ts
+    │   └── guildMemberAdd.ts
+    └── interactions/
+        └── interactionCreate.ts
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Example: Auto-moderation
+
+```typescript
+import { createEvent } from 'seyfert';
+import { PermissionFlagsBits } from 'seyfert/types';
+
+const bannedWords = ['spam', 'bad'];
+
+export default createEvent({
+  data: { name: 'messageCreate' },
+  async run(message, client, shardId) {
+    // Ignore bots
+    if (message.author.bot) return;
+    
+    // Ignore DMs
+    if (!message.guildId) return;
+    
+    // Check for banned words
+    const hasBannedWord = bannedWords.some(word => 
+      message.content.toLowerCase().includes(word)
+    );
+    
+    if (hasBannedWord) {
+      try {
+        // Delete the message
+        await message.delete();
+        
+        // Warn the user
+        const warning = await message.channel.messages.write({
+          content: `${message.author.mention}, please don't use banned words!`
+        });
+        
+        // Delete warning after 5 seconds
+        setTimeout(() => warning.delete(), 5000);
+        
+        // Log to mod channel
+        const modChannel = await client.channels.fetch('mod-log-channel-id');
+        await modChannel.messages.write({
+          embeds: [{
+            title: '⚠️ Auto-moderation Action',
+            description: `Deleted message from ${message.author.tag}`,
+            fields: [
+              { name: 'Channel', value: `<#${message.channelId}>` },
+              { name: 'Content', value: message.content.slice(0, 1000) }
+            ],
+            timestamp: new Date().toISOString()
+          }]
+        });
+      } catch (error) {
+        client.logger.error('Auto-mod error:', error);
+      }
+    }
+  }
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="/concepts/commands">
+    Build slash commands
+  </Card>
+  <Card title="Components" icon="grid" href="/concepts/components">
+    Handle interactive components
+  </Card>
+</CardGroup>

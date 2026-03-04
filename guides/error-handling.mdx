@@ -1,0 +1,452 @@
+---
+title: "Error Handling"
+description: "Master error handling in Seyfert with SeyfertError, validation patterns, and best practices"
+---
+
+## Overview
+
+Seyfert provides a robust error handling system through the `SeyfertError` class, which supports machine-readable error codes, structured metadata, and proper error chaining.
+
+## SeyfertError Class
+
+The `SeyfertError` class is the foundation of error handling in Seyfert. It extends the native JavaScript `Error` class with additional features:
+
+```typescript
+import { SeyfertError } from 'seyfert';
+
+// Basic error with code
+throw new SeyfertError('INVALID_TOKEN');
+
+// Error with metadata
+throw new SeyfertError('INVALID_OPTIONS_LENGTH', {
+  metadata: { 
+    expected: 25, 
+    received: 30 
+  }
+});
+
+// Error with cause (wrapping another error)
+try {
+  // some operation
+} catch (error) {
+  throw new SeyfertError('INTERNAL_ERROR', {
+    metadata: { operation: 'cache_fetch' },
+    cause: error
+  });
+}
+```
+
+### Error Properties
+
+<ParamField path="code" type="SeyfertErrorCode">
+  Machine-readable error identifier (e.g., `INVALID_TOKEN`, `CACHE_TIMEOUT`)
+</ParamField>
+
+<ParamField path="metadata" type="Record<string, unknown>">
+  Optional contextual data for diagnostics and debugging
+</ParamField>
+
+<ParamField path="cause" type="unknown">
+  Original error that caused this error (for error chaining)
+</ParamField>
+
+<ParamField path="message" type="string">
+  Human-readable error message (auto-generated from code)
+</ParamField>
+
+## Built-in Error Codes
+
+Seyfert includes predefined error codes for common scenarios:
+
+<CodeGroup>
+```typescript Token & Configuration
+'INVALID_TOKEN'           // Invalid bot token
+'NO_SEYFERT_CONFIG'      // Missing seyfert.config file
+'BAD_OPTION'             // Invalid configuration option
+```
+
+```typescript Validation Errors
+'INVALID_EMOJI'          // Invalid emoji format
+'EMOJI_NOT_RESOLVABLE'   // Cannot resolve emoji
+'INVALID_OPTIONS_LENGTH' // Options array length exceeded
+'MISSING_COMPONENT'      // Required component missing
+'INVALID_ATTACHMENT_TYPE'// Invalid file attachment type
+```
+
+```typescript Interaction Errors
+'INTERACTION_ALREADY_REPLIED' // Interaction already responded to
+'CANNOT_USE_REPLY'           // Reply not available for this interaction
+'UNDEFINED_LOCALE'           // Locale not defined
+```
+
+```typescript Cache Errors
+'CACHE_TIMEOUT'              // Cache operation timed out
+'CACHE_USERS_DISABLED'       // Users cache is disabled
+'CACHE_MEMBERS_DISABLED'     // Members cache is disabled
+'CACHE_CHANNELS_DISABLED'    // Channels cache is disabled
+```
+
+```typescript Worker/Shard Errors
+'WORKER_TIMEOUT'             // Worker request timed out
+'WORKER_NOT_FOUND'           // Worker not found
+'INVALID_SHARD_ID'           // Invalid shard identifier
+'CANNOT_OVERRIDE_EXISTING_SHARD' // Shard already exists
+```
+</CodeGroup>
+
+View all error codes in `src/common/it/error.ts:78`
+
+## Validation Errors
+
+For validation errors, use the `createValidationMetadata` helper to provide structured error context:
+
+```typescript
+import { SeyfertError, createValidationMetadata } from 'seyfert';
+
+function validateOptions(options: unknown) {
+  if (!Array.isArray(options)) {
+    throw new SeyfertError('INVALID_OPTIONS_LENGTH', {
+      metadata: createValidationMetadata(
+        'array',        // expected type/value
+        options,        // received value
+        { maxLength: 25 } // additional context
+      )
+    });
+  }
+  
+  if (options.length > 25) {
+    throw new SeyfertError('INVALID_OPTIONS_LENGTH', {
+      metadata: createValidationMetadata(
+        '≤ 25 items',
+        `${options.length} items`
+      )
+    });
+  }
+}
+```
+
+### Validation Metadata Convention
+
+The `createValidationMetadata` function generates metadata following this structure:
+
+- `expected`: Expected value, type, or shape
+- `received`: Actual value received
+- `receivedType`: Automatically inferred primitive/runtime type (`'null'`, `'array'`, `'object'`, etc.)
+- Additional custom fields as needed
+
+```typescript
+// Example metadata output
+{
+  expected: '≤ 25 items',
+  received: '30 items',
+  receivedType: 'array',
+  maxLength: 25
+}
+```
+
+## Error Handling in Commands
+
+Seyfert provides lifecycle hooks for handling errors in commands:
+
+### onRunError
+
+Handles errors thrown during command execution:
+
+```typescript
+import { Declare, Command, type CommandContext } from 'seyfert';
+import { SeyfertError } from 'seyfert/lib/common';
+
+@Declare({
+  name: 'ban',
+  description: 'Ban a user'
+})
+export default class BanCommand extends Command {
+  async run(ctx: CommandContext) {
+    const member = ctx.options.getUser('user');
+    // Command logic that might throw
+    await ctx.guild()?.members.ban(member.id, { reason: 'Violation' });
+  }
+  
+  async onRunError(ctx: CommandContext, error: unknown) {
+    // Handle specific error types
+    if (error instanceof SeyfertError) {
+      if (error.code === 'CACHE_MEMBERS_DISABLED') {
+        return ctx.editOrReply({
+          content: '❌ Member cache is disabled. Cannot fetch member.'
+        });
+      }
+    }
+    
+    // Log unexpected errors
+    ctx.client.logger.error('Ban command failed:', error);
+    
+    return ctx.editOrReply({
+      content: '❌ An error occurred while banning the user.'
+    });
+  }
+}
+```
+
+### onMiddlewaresError
+
+Handles errors during middleware execution:
+
+```typescript
+export default class ProtectedCommand extends Command {
+  middlewares = ['adminOnly'];
+  
+  async onMiddlewaresError(ctx: CommandContext, error: unknown) {
+    ctx.client.logger.warn('Middleware failed:', error);
+    return ctx.editOrReply({
+      content: '⛔ You do not have permission to use this command.'
+    });
+  }
+}
+```
+
+### onInternalError
+
+Handles internal framework errors (last resort handler):
+
+```typescript
+export default class MyCommand extends Command {
+  async onInternalError(client: UsingClient, error: unknown) {
+    client.logger.fatal('Critical error in command:', error);
+    // Optionally send to error tracking service
+  }
+}
+```
+
+## Global Error Handlers
+
+Configure default error handlers for all commands:
+
+```typescript src/index.ts
+import { Client } from 'seyfert';
+
+const client = new Client({
+  commands: {
+    defaults: {
+      onRunError(ctx, error) {
+        ctx.client.logger.error(`Command ${ctx.command.name} failed:`, error);
+        return ctx.editOrReply({ 
+          content: '❌ An unexpected error occurred.' 
+        });
+      },
+      
+      onMiddlewaresError(ctx, error) {
+        return ctx.editOrReply({ 
+          content: '⛔ Access denied.' 
+        });
+      },
+      
+      onInternalError(client, error) {
+        client.logger.fatal('Internal error:', error);
+      }
+    }
+  }
+});
+```
+
+## Component Error Handlers
+
+Handle errors in component collectors:
+
+```typescript
+import type { ComponentInteraction } from 'seyfert';
+
+// Using collector options
+const collector = message.createComponentCollector({
+  timeout: 60000,
+  
+  onError: async (interaction, error, stop, refresh) => {
+    console.error('Component error:', error);
+    
+    await interaction.write({
+      content: '❌ Something went wrong. Please try again.',
+      flags: MessageFlags.Ephemeral
+    });
+    
+    // Optionally stop the collector
+    stop('error');
+  }
+});
+
+collector.run('button_id', async (interaction) => {
+  // This error will be caught by onError
+  throw new Error('Something went wrong!');
+});
+```
+
+## Try-Catch Patterns
+
+### Basic Pattern
+
+```typescript
+try {
+  const data = await client.cache.members?.get(memberId);
+  // Use data
+} catch (error) {
+  if (error instanceof SeyfertError) {
+    if (error.code === 'CACHE_MEMBERS_DISABLED') {
+      // Handle gracefully
+      return fetchMemberFromAPI(memberId);
+    }
+  }
+  throw error; // Re-throw if not handled
+}
+```
+
+### Wrapping External Errors
+
+```typescript
+import { SeyfertError } from 'seyfert';
+
+async function fetchUserData(userId: string) {
+  try {
+    const response = await fetch(`https://api.example.com/users/${userId}`);
+    return await response.json();
+  } catch (error) {
+    throw new SeyfertError('INTERNAL_ERROR', {
+      metadata: { 
+        operation: 'fetch_user_data',
+        userId 
+      },
+      cause: error
+    });
+  }
+}
+```
+
+### Graceful Degradation
+
+```typescript
+async function getGuildData(guildId: string) {
+  // Try cache first
+  try {
+    return await client.cache.guilds?.get(guildId);
+  } catch (error) {
+    if (error instanceof SeyfertError && 
+        error.code === 'CACHE_TIMEOUT') {
+      // Fallback to API on timeout
+      client.logger.warn('Cache timeout, using API fallback');
+      return await client.guilds.fetch(guildId);
+    }
+    throw error;
+  }
+}
+```
+
+## Error Serialization
+
+SeyfertError provides a `toJSON()` method for logging and debugging:
+
+```typescript
+const error = new SeyfertError('INVALID_TOKEN', {
+  metadata: { shardId: 0 },
+  cause: new Error('Connection refused')
+});
+
+console.log(error.toJSON());
+// Output:
+// {
+//   name: 'SeyfertError',
+//   message: 'Invalid token.',
+//   code: 'INVALID_TOKEN',
+//   metadata: { shardId: 0 },
+//   cause: Error: Connection refused
+// }
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Specific Error Codes" icon="code">
+    Always use specific error codes instead of generic ones when possible:
+    
+    ```typescript
+    // Good ✅
+    throw new SeyfertError('CACHE_USERS_DISABLED');
+    
+    // Avoid ❌
+    throw new SeyfertError('INTERNAL_ERROR');
+    ```
+  </Accordion>
+  
+  <Accordion title="Include Contextual Metadata" icon="database">
+    Provide metadata to help with debugging:
+    
+    ```typescript
+    throw new SeyfertError('WORKER_NOT_FOUND', {
+      metadata: { 
+        workerId: 3, 
+        availableWorkers: [0, 1, 2],
+        timestamp: Date.now()
+      }
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Chain Errors Properly" icon="link">
+    Use the `cause` option to preserve error context:
+    
+    ```typescript
+    try {
+      await someOperation();
+    } catch (original) {
+      throw new SeyfertError('OPERATION_FAILED', {
+        cause: original  // Preserves stack trace
+      });
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Errors at the Right Level" icon="layer-group">
+    - Handle expected errors locally
+    - Use command-level handlers for command-specific errors
+    - Use global handlers as a safety net
+  </Accordion>
+  
+  <Accordion title="Log Appropriately" icon="file-lines">
+    Use appropriate log levels:
+    
+    ```typescript
+    client.logger.error()  // For expected errors
+    client.logger.warn()   // For handled issues
+    client.logger.fatal()  // For critical errors
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Never expose sensitive error details to users. Always sanitize error messages before displaying them in Discord.
+</Warning>
+
+## Custom Error Codes
+
+You can use custom error codes beyond the built-in ones:
+
+```typescript
+throw new SeyfertError('PREMIUM_REQUIRED', {
+  metadata: {
+    feature: 'custom_embeds',
+    userId: user.id
+  }
+});
+
+// The message will be auto-generated as "Premium Required"
+```
+
+The error code will be automatically formatted into a readable message by converting underscores to spaces and capitalizing words.
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Collectors" icon="inbox" href="/guides/collectors">
+    Learn about error handling in collectors
+  </Card>
+  
+  <Card title="Logger" icon="terminal" href="/api/utils/logger">
+    Explore logging options and configuration
+  </Card>
+</CardGroup>

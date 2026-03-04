@@ -1,0 +1,630 @@
+---
+title: 'ComponentContext & ModalContext'
+description: 'Context objects for component and modal interactions'
+icon: 'layer-group'
+---
+
+## Overview
+
+Context classes provide a unified interface for interacting with Discord component and modal submissions. They extend `BaseContext` and provide methods for responding to interactions, accessing guild/channel/user data, and managing interaction states.
+
+## ComponentContext
+
+Context object passed to component command handlers (buttons, select menus).
+
+### Type Parameters
+
+```typescript
+class ComponentContext<
+  Type extends keyof ContextComponentCommandInteractionMap,
+  M extends keyof RegisteredMiddlewares = never
+>
+```
+
+- `Type` - The component type (`'Button'`, `'StringSelect'`, `'UserSelect'`, `'RoleSelect'`, `'MentionableSelect'`, `'ChannelSelect'`)
+- `M` - Registered middleware keys
+
+### Properties
+
+<ParamField path="client" type="UsingClient">
+  The bot client instance.
+</ParamField>
+
+<ParamField path="interaction" type="ContextComponentCommandInteractionMap[Type]">
+  The underlying component interaction object.
+</ParamField>
+
+<ParamField path="command" type="ComponentCommand">
+  The command instance that handled this interaction.
+</ParamField>
+
+<ParamField path="metadata" type="CommandMetadata">
+  Metadata populated by middleware execution.
+</ParamField>
+
+<ParamField path="globalMetadata" type="GlobalMetadata">
+  Global metadata shared across commands.
+</ParamField>
+
+<ParamField path="customId" type="string">
+  The custom ID of the component that was interacted with.
+</ParamField>
+
+<ParamField path="t" type="LocaleFunction">
+  Localization function based on the interaction's locale.
+</ParamField>
+
+<ParamField path="author" type="UserStructure">
+  The user who triggered the interaction.
+</ParamField>
+
+<ParamField path="member" type="InteractionGuildMemberStructure | undefined">
+  The guild member who triggered the interaction (if in a guild).
+</ParamField>
+
+<ParamField path="guildId" type="string | undefined">
+  The ID of the guild where the interaction occurred.
+</ParamField>
+
+<ParamField path="channelId" type="string">
+  The ID of the channel where the interaction occurred.
+</ParamField>
+
+### Response Methods
+
+#### write()
+
+```typescript
+write<FR extends boolean = false>(
+  body: InteractionCreateBodyRequest,
+  fetchReply?: FR
+): Promise<When<FR, WebhookMessageStructure, void>>
+```
+
+Send a response to the interaction.
+
+**Example:**
+```typescript
+await ctx.write({
+  content: 'Button clicked!',
+  flags: MessageFlags.Ephemeral
+});
+```
+
+#### deferReply()
+
+```typescript
+deferReply<FR extends boolean = false>(
+  ephemeral?: boolean,
+  fetchReply?: FR
+): Promise<When<FR, WebhookMessageStructure, undefined>>
+```
+
+Defer the reply to show a "thinking" state.
+
+**Example:**
+```typescript
+await ctx.deferReply(true); // Ephemeral "thinking" state
+// ... do work ...
+await ctx.editResponse({ content: 'Done!' });
+```
+
+#### deferUpdate()
+
+```typescript
+deferUpdate(): Promise<void>
+```
+
+ACK the interaction without showing a loading state. The user sees no immediate feedback.
+
+**Example:**
+```typescript
+await ctx.deferUpdate();
+// ... do work ...
+await ctx.editResponse({ content: 'Updated!' });
+```
+
+#### update()
+
+```typescript
+update(body: ComponentInteractionMessageUpdate): Promise<void>
+```
+
+Update the message that contains the component.
+
+**Example:**
+```typescript
+await ctx.update({
+  content: 'Message updated!',
+  components: [] // Remove components
+});
+```
+
+#### editResponse()
+
+```typescript
+editResponse(body: InteractionMessageUpdateBodyRequest): Promise<WebhookMessageStructure>
+```
+
+Edit the interaction response after deferring.
+
+**Example:**
+```typescript
+await ctx.deferReply();
+await ctx.editResponse({ content: 'Processing complete!' });
+```
+
+#### editOrReply()
+
+```typescript
+editOrReply<FR extends boolean = false>(
+  body: InteractionCreateBodyRequest | InteractionMessageUpdateBodyRequest,
+  fetchReply?: FR
+): Promise<When<FR, WebhookMessageStructure, void>>
+```
+
+Edit if already replied, otherwise send a new reply.
+
+**Example:**
+```typescript
+await ctx.editOrReply({ content: 'Response' });
+```
+
+#### followup()
+
+```typescript
+followup(body: MessageWebhookCreateBodyRequest): Promise<WebhookMessageStructure>
+```
+
+Send a followup message after the initial response.
+
+**Example:**
+```typescript
+await ctx.write({ content: 'Initial response' });
+await ctx.followup({ content: 'Additional info' });
+```
+
+#### fetchResponse()
+
+```typescript
+fetchResponse(): Promise<WebhookMessageStructure>
+```
+
+Fetch the interaction response message.
+
+#### deleteResponse()
+
+```typescript
+deleteResponse(): Promise<void>
+```
+
+Delete the interaction response.
+
+#### modal()
+
+```typescript
+modal(body: ModalCreateBodyRequest, options?: undefined): Promise<undefined>
+modal(body: ModalCreateBodyRequest, options: ModalCreateOptions): Promise<ModalSubmitInteraction | null>
+```
+
+Show a modal in response to the interaction.
+
+**Example:**
+```typescript
+await ctx.modal({
+  title: 'Feedback Form',
+  customId: 'feedback_modal',
+  components: [
+    {
+      type: 1,
+      components: [{
+        type: 4,
+        customId: 'feedback',
+        label: 'Your Feedback',
+        style: 2
+      }]
+    }
+  ]
+});
+```
+
+### Data Fetching Methods
+
+#### channel()
+
+```typescript
+channel(mode?: 'rest' | 'flow'): Promise<AllChannels>
+channel(mode: 'cache'): ReturnCache<AllChannels>
+```
+
+Fetch the channel where the interaction occurred.
+
+**Example:**
+```typescript
+const channel = await ctx.channel();
+const cachedChannel = ctx.channel('cache');
+```
+
+#### guild()
+
+```typescript
+guild(mode?: 'rest' | 'flow', query?: RESTGetAPIGuildQuery): Promise<GuildStructure | undefined>
+guild(mode: 'cache', query?: RESTGetAPIGuildQuery): ReturnCache<GuildStructure | undefined>
+```
+
+Fetch the guild where the interaction occurred.
+
+**Example:**
+```typescript
+const guild = await ctx.guild();
+if (guild) {
+  console.log(guild.name);
+}
+```
+
+#### me()
+
+```typescript
+me(mode?: 'rest' | 'flow'): Promise<GuildMemberStructure | undefined>
+me(mode: 'cache'): ReturnCache<GuildMemberStructure | undefined>
+```
+
+Fetch the bot's member object in the guild.
+
+**Example:**
+```typescript
+const botMember = await ctx.me();
+if (botMember) {
+  console.log(botMember.permissions);
+}
+```
+
+### Type Guards
+
+#### isButton()
+
+```typescript
+isButton(): this is ComponentContext<'Button', M>
+```
+
+Check if the interaction is a button.
+
+#### isStringSelectMenu()
+
+```typescript
+isStringSelectMenu(): this is ComponentContext<'StringSelect', M>
+```
+
+Check if the interaction is a string select menu.
+
+#### isUserSelectMenu()
+
+```typescript
+isUserSelectMenu(): this is ComponentContext<'UserSelect', M>
+```
+
+Check if the interaction is a user select menu.
+
+#### isRoleSelectMenu()
+
+```typescript
+isRoleSelectMenu(): this is ComponentContext<'RoleSelect', M>
+```
+
+Check if the interaction is a role select menu.
+
+#### isMentionableSelectMenu()
+
+```typescript
+isMentionableSelectMenu(): this is ComponentContext<'MentionableSelect', M>
+```
+
+Check if the interaction is a mentionable select menu.
+
+#### isChannelSelectMenu()
+
+```typescript
+isChannelSelectMenu(): this is ComponentContext<'ChannelSelect', M>
+```
+
+Check if the interaction is a channel select menu.
+
+#### inGuild()
+
+```typescript
+inGuild(): this is GuildComponentContext<Type, M>
+```
+
+Check if the interaction occurred in a guild. Narrows types to guarantee `guildId` and `member` are defined.
+
+## ModalContext
+
+Context object passed to modal command handlers.
+
+### Type Parameters
+
+```typescript
+class ModalContext<M extends keyof RegisteredMiddlewares = never>
+```
+
+- `M` - Registered middleware keys
+
+### Properties
+
+<ParamField path="client" type="UsingClient">
+  The bot client instance.
+</ParamField>
+
+<ParamField path="interaction" type="ModalSubmitInteraction">
+  The underlying modal submit interaction object.
+</ParamField>
+
+<ParamField path="command" type="ModalCommand">
+  The command instance that handled this interaction.
+</ParamField>
+
+<ParamField path="metadata" type="CommandMetadata">
+  Metadata populated by middleware execution.
+</ParamField>
+
+<ParamField path="globalMetadata" type="GlobalMetadata">
+  Global metadata shared across commands.
+</ParamField>
+
+<ParamField path="customId" type="string">
+  The custom ID of the modal that was submitted.
+</ParamField>
+
+<ParamField path="components" type="ComponentStructure[]">
+  The modal components with user input values.
+</ParamField>
+
+<ParamField path="t" type="LocaleFunction">
+  Localization function based on the interaction's locale.
+</ParamField>
+
+<ParamField path="author" type="UserStructure">
+  The user who submitted the modal.
+</ParamField>
+
+<ParamField path="member" type="InteractionGuildMemberStructure | undefined">
+  The guild member who submitted the modal (if in a guild).
+</ParamField>
+
+<ParamField path="guildId" type="string | undefined">
+  The ID of the guild where the interaction occurred.
+</ParamField>
+
+<ParamField path="channelId" type="string">
+  The ID of the channel where the interaction occurred.
+</ParamField>
+
+### Response Methods
+
+ModalContext has the same response methods as ComponentContext:
+
+- `write()` - Send a response
+- `deferReply()` - Defer the reply
+- `editResponse()` - Edit the response
+- `editOrReply()` - Edit or reply
+- `followup()` - Send a followup message
+- `fetchResponse()` - Fetch the response message
+- `deleteResponse()` - Delete the response
+
+### Data Fetching Methods
+
+ModalContext has the same data fetching methods as ComponentContext:
+
+- `channel()` - Fetch the channel
+- `guild()` - Fetch the guild
+- `me()` - Fetch the bot's member object
+
+### Type Guards
+
+#### isModal()
+
+```typescript
+isModal(): this is ModalContext<M>
+```
+
+Check if the context is a modal context (always returns `true`).
+
+#### inGuild()
+
+```typescript
+inGuild(): this is GuildModalContext<M>
+```
+
+Check if the interaction occurred in a guild. Narrows types to guarantee `guildId` and `member` are defined.
+
+## Examples
+
+### ComponentContext - Button Example
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+import { MessageFlags } from 'seyfert/lib/types';
+
+export default class VerifyButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'verify';
+
+  async run(ctx: ComponentContext<'Button'>) {
+    // Check if in guild
+    if (!ctx.inGuild()) {
+      return ctx.write({
+        content: 'This button only works in servers!',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    // Access user info
+    const user = ctx.author;
+    const member = ctx.member; // Guaranteed to exist due to inGuild()
+
+    // Defer update
+    await ctx.deferUpdate();
+
+    // Perform verification
+    await assignVerifiedRole(ctx.guildId, user.id);
+
+    // Update message
+    await ctx.editResponse({
+      content: `${user.username} has been verified!`,
+      components: [] // Remove button
+    });
+  }
+}
+```
+
+### ComponentContext - Select Menu Example
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+
+export default class ColorSelect extends ComponentCommand {
+  componentType = 'RoleSelect' as const;
+  customId = 'color_roles';
+
+  async run(ctx: ComponentContext<'RoleSelect'>) {
+    // Access selected values
+    const selectedRoles = ctx.interaction.values;
+
+    // Defer reply
+    await ctx.deferReply(true);
+
+    // Process selection
+    for (const roleId of selectedRoles) {
+      await ctx.client.members.addRole(
+        ctx.guildId!,
+        ctx.author.id,
+        roleId
+      );
+    }
+
+    // Send confirmation
+    await ctx.editResponse({
+      content: `Added ${selectedRoles.length} role(s)!`
+    });
+
+    // Send followup
+    await ctx.followup({
+      content: 'You can change your roles anytime.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### ModalContext - Form Example
+
+```typescript
+import { ModalCommand, ModalContext } from 'seyfert';
+import { MessageFlags } from 'seyfert/lib/types';
+
+export default class SuggestionModal extends ModalCommand {
+  customId = 'suggestion_form';
+
+  async run(ctx: ModalContext) {
+    // Extract form data
+    const title = ctx.components[0].components[0].value;
+    const description = ctx.components[1].components[0].value;
+    const category = ctx.components[2].components[0].value;
+
+    // Defer reply for processing
+    await ctx.deferReply(true);
+
+    // Get guild and channel
+    const guild = await ctx.guild();
+    const channel = await ctx.channel();
+
+    // Create suggestion in database
+    const suggestion = await database.suggestions.create({
+      guildId: ctx.guildId,
+      authorId: ctx.author.id,
+      title,
+      description,
+      category,
+      createdAt: new Date()
+    });
+
+    // Send to suggestions channel
+    const suggestionsChannel = await ctx.client.channels.fetch('123456789');
+    await suggestionsChannel.messages.write({
+      embeds: [{
+        title: `Suggestion #${suggestion.id}: ${title}`,
+        description,
+        fields: [{ name: 'Category', value: category }],
+        author: {
+          name: ctx.author.username,
+          iconUrl: ctx.author.avatarURL()
+        }
+      }]
+    });
+
+    // Confirm to user
+    await ctx.editResponse({
+      content: `Your suggestion has been submitted! ID: #${suggestion.id}`
+    });
+  }
+}
+```
+
+### Using Type Guards
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+
+export default class UniversalComponent extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = /^action_/;
+
+  async run(ctx: ComponentContext) {
+    // Check component type
+    if (ctx.isButton()) {
+      await ctx.write({ content: 'Button pressed!' });
+    } else if (ctx.isStringSelectMenu()) {
+      const values = ctx.interaction.values;
+      await ctx.write({ content: `Selected: ${values.join(', ')}` });
+    }
+
+    // Check if in guild
+    if (ctx.inGuild()) {
+      const guild = await ctx.guild(); // No undefined check needed
+      console.log(`Action in ${guild.name}`);
+    }
+  }
+}
+```
+
+### Accessing Metadata
+
+```typescript
+import { ComponentCommand, ComponentContext } from 'seyfert';
+
+export default class TrackedButton extends ComponentCommand {
+  componentType = 'Button' as const;
+  customId = 'tracked_action';
+  middlewares = ['rateLimiter', 'analytics'] as const;
+
+  async run(ctx: ComponentContext<'Button', 'rateLimiter' | 'analytics'>) {
+    // Access middleware metadata
+    const rateLimitData = ctx.metadata.rateLimiter;
+    const analyticsData = ctx.metadata.analytics;
+
+    // Access global metadata
+    const startTime = ctx.globalMetadata.requestStartTime;
+
+    await ctx.write({
+      content: `Action processed! Remaining: ${rateLimitData.remaining}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## See Also
+
+- [ComponentCommand](/api/components/component-command) - Handler class for components
+- [ModalCommand](/api/components/modal-command) - Handler class for modals
+- [BaseContext](/api/commands/command-context) - Base context class

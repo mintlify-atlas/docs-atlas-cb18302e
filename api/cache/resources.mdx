@@ -1,0 +1,573 @@
+---
+title: 'Cache Resources'
+description: 'Cache resource classes for managing specific Discord data types'
+---
+
+## Overview
+
+Cache resources are specialized classes that manage specific types of Discord data. Each resource extends one of three base classes depending on their relationship to guilds:
+
+- **BaseResource** - Non-guild resources (users, guilds)
+- **GuildBasedResource** - Resources that require both guild ID and resource ID (members, voice states)
+- **GuildRelatedResource** - Resources associated with guilds but accessed by resource ID (channels, roles, emojis, etc.)
+
+## Resource Types
+
+### Non-Guild Based Resources
+
+These resources exist independently of guilds.
+
+#### Users
+
+Manages Discord user data.
+
+```typescript
+class Users extends BaseResource<UserStructure, APIUser> {
+  namespace = 'user';
+  
+  get(id: string): ReturnCache<UserStructure | undefined>;
+  raw(id: string): ReturnCache<APIUser | undefined>;
+  bulk(ids: string[]): ReturnCache<UserStructure[]>;
+  bulkRaw(ids: string[]): ReturnCache<APIUser[]>;
+  values(): ReturnCache<UserStructure[]>;
+  valuesRaw(): ReturnCache<APIUser[]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get a transformed user structure
+const user = await client.cache.users?.get('123456789');
+console.log(user?.username);
+
+// Get raw API data
+const rawUser = await client.cache.users?.raw('123456789');
+
+// Get all cached users
+const allUsers = await client.cache.users?.values();
+```
+
+#### Guilds
+
+Manages Discord guild (server) data.
+
+```typescript
+class Guilds extends BaseResource<GuildStructure, APIGuild> {
+  namespace = 'guild';
+  
+  get(id: string): ReturnCache<GuildStructure<'cached'> | undefined>;
+  raw(id: string): ReturnCache<APIGuild | undefined>;
+  set(from: CacheFrom, id: string, data: GatewayGuildCreateDispatchData): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get a guild
+const guild = await client.cache.guilds?.get('987654321');
+console.log(guild?.name);
+
+// Remove a guild (also removes all related data)
+await client.cache.guilds?.remove('987654321');
+```
+
+<Note>
+  Removing a guild automatically removes all related resources (channels, roles, members, etc.)
+</Note>
+
+### Guild-Based Resources
+
+These resources require both a guild ID and resource ID for access.
+
+#### Members
+
+Manages guild member data.
+
+```typescript
+class Members extends GuildBasedResource<GuildMemberStructure, APIGuildMember> {
+  namespace = 'member';
+  
+  get(id: string, guild: string): ReturnCache<GuildMemberStructure | undefined>;
+  raw(id: string, guild: string): ReturnCache<APIGuildMember | undefined>;
+  set(from: CacheFrom, memberId: string, guildId: string, data: APIGuildMember): Promise<void>;
+  values(guild: string): ReturnCache<GuildMemberStructure[]>;
+  count(guild: string): ReturnCache<number>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get a specific member
+const member = await client.cache.members?.get('123456789', '987654321');
+console.log(member?.nickname);
+
+// Get all members in a guild
+const guildMembers = await client.cache.members?.values('987654321');
+
+// Count members in a guild
+const memberCount = await client.cache.members?.count('987654321');
+
+// Get members across all guilds
+const allMembers = await client.cache.members?.values('*');
+```
+
+<Warning>
+  Members require the `GuildMembers` privileged intent to be cached.
+</Warning>
+
+#### VoiceStates
+
+Manages voice connection states.
+
+```typescript
+class VoiceStates extends GuildBasedResource<VoiceStateStructure, APIVoiceState> {
+  namespace = 'voice_state';
+  
+  get(id: string, guild: string): ReturnCache<VoiceStateStructure | undefined>;
+  values(guild: string): ReturnCache<VoiceStateStructure[]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get user's voice state in a guild
+const voiceState = await client.cache.voiceStates?.get('123456789', '987654321');
+if (voiceState) {
+  console.log(`User is in channel: ${voiceState.channelId}`);
+  console.log(`Muted: ${voiceState.mute}`);
+  console.log(`Deafened: ${voiceState.deaf}`);
+}
+```
+
+### Guild-Related Resources
+
+These resources are associated with guilds but are accessed by their resource ID.
+
+#### Channels
+
+Manages channel data.
+
+```typescript
+class Channels extends GuildRelatedResource<AllChannels, APIChannel> {
+  namespace = 'channel';
+  
+  get(id: string): ReturnCache<AllChannels | undefined>;
+  raw(id: string): ReturnCache<Omit<APIChannel, 'permission_overwrites'> | undefined>;
+  set(from: CacheFrom, id: string, guildId: string, data: APIChannel): ReturnCache<void>;
+  values(guild: string): ReturnCache<AllChannels[]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get a channel
+const channel = await client.cache.channels?.get('111222333');
+if (channel?.isTextGuild()) {
+  console.log(`Channel name: ${channel.name}`);
+}
+
+// Get all channels in a guild
+const guildChannels = await client.cache.channels?.values('987654321');
+
+// Get all cached channels across all guilds
+const allChannels = await client.cache.channels?.values('*');
+```
+
+#### Roles
+
+Manages guild role data.
+
+```typescript
+class Roles extends GuildRelatedResource<RoleStructure, APIRole> {
+  namespace = 'role';
+  
+  get(id: string): ReturnCache<RoleStructure | undefined>;
+  values(guild: string): ReturnCache<RoleStructure[]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get a specific role
+const role = await client.cache.roles?.get('444555666');
+console.log(role?.name);
+console.log(role?.permissions);
+
+// Get all roles in a guild
+const guildRoles = await client.cache.roles?.values('987654321');
+```
+
+#### Emojis
+
+Manages custom guild emoji data.
+
+```typescript
+class Emojis extends GuildRelatedResource<EmojiStructure, APIEmoji> {
+  namespace = 'emoji';
+  
+  get(id: string): ReturnCache<EmojiStructure | undefined>;
+  values(guild: string): ReturnCache<EmojiStructure[]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get an emoji
+const emoji = await client.cache.emojis?.get('777888999');
+console.log(emoji?.name);
+
+// Get all emojis in a guild
+const guildEmojis = await client.cache.emojis?.values('987654321');
+```
+
+<Note>
+  Emojis require the `GuildExpressions` intent.
+</Note>
+
+#### Stickers
+
+Manages custom guild sticker data.
+
+```typescript
+class Stickers extends GuildRelatedResource<StickerStructure, APISticker> {
+  namespace = 'sticker';
+  
+  get(id: string): ReturnCache<StickerStructure | undefined>;
+  values(guild: string): ReturnCache<StickerStructure[]>;
+}
+```
+
+#### Messages
+
+Manages cached message data.
+
+```typescript
+class Messages extends GuildRelatedResource<MessageStructure, APIMessage> {
+  namespace = 'message';
+  
+  get(id: string): ReturnCache<MessageStructure | undefined>;
+  values(channelId: string): ReturnCache<MessageStructure[]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get a message
+const message = await client.cache.messages?.get('123456789');
+console.log(message?.content);
+
+// Get all messages in a channel
+const channelMessages = await client.cache.messages?.values('111222333');
+```
+
+<Warning>
+  Message caching can consume significant memory. Consider using `LimitedMemoryAdapter` with message limits.
+</Warning>
+
+#### Presences
+
+Manages user presence data (online status, activities).
+
+```typescript
+class Presences extends GuildRelatedResource<PresenceStructure, APIPresence> {
+  namespace = 'presence';
+  
+  get(id: string): ReturnCache<PresenceStructure | undefined>;
+  values(guild: string): ReturnCache<PresenceStructure[]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get a user's presence in a guild
+const presence = await client.cache.presences?.get('123456789');
+console.log(presence?.status); // 'online', 'idle', 'dnd', 'offline'
+console.log(presence?.activities);
+```
+
+<Warning>
+  Presences require the `GuildPresences` privileged intent.
+</Warning>
+
+#### Overwrites
+
+Manages channel permission overwrites.
+
+```typescript
+class Overwrites extends GuildRelatedResource<OverwriteStructure[], APIOverwrite[]> {
+  namespace = 'overwrite';
+  
+  get(channelId: string): ReturnCache<OverwriteStructure[] | undefined>;
+  values(guild: string): ReturnCache<OverwriteStructure[][]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Get overwrites for a channel
+const overwrites = await client.cache.overwrites?.get('111222333');
+for (const overwrite of overwrites || []) {
+  console.log(`Type: ${overwrite.type}`);
+  console.log(`ID: ${overwrite.id}`);
+  console.log(`Allow: ${overwrite.allow}`);
+  console.log(`Deny: ${overwrite.deny}`);
+}
+```
+
+#### StageInstances
+
+Manages stage channel instances.
+
+```typescript
+class StageInstances extends GuildRelatedResource<StageInstanceStructure, APIStageInstance> {
+  namespace = 'stage_instance';
+  
+  get(id: string): ReturnCache<StageInstanceStructure | undefined>;
+  values(guild: string): ReturnCache<StageInstanceStructure[]>;
+}
+```
+
+#### Bans
+
+Manages guild ban data.
+
+```typescript
+class Bans extends GuildBasedResource<BanStructure, APIBan> {
+  namespace = 'ban';
+  
+  get(userId: string, guildId: string): ReturnCache<BanStructure | undefined>;
+  values(guild: string): ReturnCache<BanStructure[]>;
+}
+```
+
+**Example:**
+
+```typescript
+// Check if a user is banned
+const ban = await client.cache.bans?.get('123456789', '987654321');
+if (ban) {
+  console.log(`Ban reason: ${ban.reason}`);
+}
+
+// Get all bans in a guild
+const guildBans = await client.cache.bans?.values('987654321');
+```
+
+<Note>
+  Bans require the `GuildModeration` intent.
+</Note>
+
+## Base Resource Classes
+
+### BaseResource
+
+Base class for non-guild resources.
+
+```typescript
+class BaseResource<T = any, S = any> {
+  namespace: string;
+  adapter: Adapter;
+  
+  get(id: string): ReturnCache<T | undefined>;
+  bulk(ids: string[]): ReturnCache<T[]>;
+  set(from: CacheFrom, id: string, data: S): ReturnCache<void>;
+  patch(from: CacheFrom, id: string, data: S): ReturnCache<void>;
+  remove(id: string): ReturnCache<void>;
+  keys(): ReturnCache<string[]>;
+  values(): ReturnCache<T[]>;
+  count(): ReturnCache<number>;
+  contains(id: string): ReturnCache<boolean>;
+  flush(): ReturnCache<void>;
+  hashId(id: string): string;
+}
+```
+
+### GuildBasedResource
+
+Base class for guild-based resources (requires guild ID + resource ID).
+
+```typescript
+class GuildBasedResource<T = any, S = any> {
+  namespace: string;
+  adapter: Adapter;
+  
+  get(id: string, guild: string): ReturnCache<T | undefined>;
+  bulk(ids: string[], guild: string): ReturnCache<T[]>;
+  set(from: CacheFrom, id: string, guild: string, data: S): ReturnCache<void>;
+  patch(from: CacheFrom, id: string, guild: string, data: S): ReturnCache<void>;
+  remove(id: string | string[], guild: string): ReturnCache<void>;
+  keys(guild: string): ReturnCache<string[]>;
+  values(guild: string): ReturnCache<T[]>;
+  count(guild: string): ReturnCache<number>;
+  contains(id: string, guild: string): ReturnCache<boolean>;
+  flush(guild?: string): ReturnCache<void>;
+  hashId(id: string): string;
+  hashGuildId(guild: string, id: string): string;
+}
+```
+
+### GuildRelatedResource
+
+Base class for guild-related resources (accessed by resource ID, associated with guild).
+
+```typescript
+class GuildRelatedResource<T = any, S = any> {
+  namespace: string;
+  adapter: Adapter;
+  
+  get(id: string): ReturnCache<T | undefined>;
+  bulk(ids: string[]): ReturnCache<T[]>;
+  set(from: CacheFrom, id: string, guild: string, data: S): ReturnCache<void>;
+  patch(from: CacheFrom, id: string, guild: string, data: S): ReturnCache<void>;
+  remove(id: string | string[], guild: string): ReturnCache<void>;
+  keys(guild: string): ReturnCache<string[]>;
+  values(guild: string): ReturnCache<T[]>;
+  count(guild: string): ReturnCache<number>;
+  contains(id: string, guild: string): ReturnCache<boolean>;
+  flush(guild: string): ReturnCache<void>;
+  hashId(id: string): string;
+}
+```
+
+## Common Patterns
+
+### Raw vs Transformed Data
+
+Most resources provide both transformed structures and raw API data:
+
+```typescript
+// Transformed structure (recommended)
+const user = await client.cache.users?.get('123456789');
+// Returns UserStructure with helper methods
+
+// Raw API data
+const rawUser = await client.cache.users?.raw('123456789');
+// Returns APIUser (plain object)
+```
+
+### Bulk Operations
+
+```typescript
+// Get multiple users at once
+const users = await client.cache.users?.bulk([
+  '111111111',
+  '222222222',
+  '333333333',
+]);
+
+// Get multiple members from a guild
+const members = await client.cache.members?.bulk(
+  ['111111111', '222222222'],
+  '987654321'
+);
+```
+
+### Filtering by Guild
+
+```typescript
+// Get resources in a specific guild
+const guildChannels = await client.cache.channels?.values('987654321');
+
+// Get resources across ALL guilds
+const allChannels = await client.cache.channels?.values('*');
+
+// Count resources in a guild
+const channelCount = await client.cache.channels?.count('987654321');
+```
+
+### Resource Filtering
+
+Resources have a `filter` method that determines what gets cached:
+
+```typescript
+class CustomUsers extends Users {
+  // Only cache bot users
+  filter(data: APIUser, id: string, from: CacheFrom) {
+    return data.bot === true;
+  }
+}
+```
+
+## Usage Examples
+
+### Checking Resource Availability
+
+```typescript
+// Resources may be undefined if disabled in cache config
+if (client.cache.members) {
+  const member = await client.cache.members.get('123', '987');
+}
+
+// Or use optional chaining
+const member = await client.cache.members?.get('123', '987');
+```
+
+### Working with Member Data
+
+```typescript
+// Members require both user and member data
+const member = await client.cache.members?.get('123456789', '987654321');
+
+if (member) {
+  console.log(member.user.username);  // User data
+  console.log(member.nickname);        // Member data
+  console.log(member.roles);           // Member roles
+  console.log(member.joinedAt);        // Join timestamp
+}
+```
+
+### Iterating Over Resources
+
+```typescript
+// Get all guilds
+const guilds = await client.cache.guilds?.values();
+
+for (const guild of guilds || []) {
+  console.log(`Guild: ${guild.name}`);
+  
+  // Get channels in this guild
+  const channels = await client.cache.channels?.values(guild.id);
+  console.log(`  Channels: ${channels?.length || 0}`);
+  
+  // Get members in this guild
+  const memberCount = await client.cache.members?.count(guild.id);
+  console.log(`  Members: ${memberCount || 0}`);
+}
+```
+
+## Best Practices
+
+<Tip>
+  **Use Bulk Operations**: When fetching multiple resources, use `bulk()` instead of multiple `get()` calls for better performance.
+</Tip>
+
+<Warning>
+  **Check Intents**: Ensure you have the required intents enabled for the resources you want to cache.
+</Warning>
+
+<Note>
+  **Optional Resources**: Always check if a resource is defined before using it, as resources can be disabled in cache configuration.
+</Note>
+
+<Tip>
+  **Memory Management**: For large bots, consider:
+  - Disabling unused resources
+  - Using `LimitedMemoryAdapter` with appropriate limits
+  - Implementing custom filtering logic
+</Tip>
+
+## See Also
+
+- [Cache](/api/cache/cache) - Core cache class
+- [Cache Adapters](/api/cache/adapters) - Storage adapters

@@ -1,0 +1,322 @@
+---
+title: 'Logger'
+description: 'Logging utility with customizable log levels and file output'
+---
+
+## Logger
+
+A flexible logging utility for managing log messages with various severity levels and optional file persistence.
+
+### Type Definition
+
+```typescript
+class Logger
+```
+
+### Constructor
+
+```typescript
+new Logger(options: LoggerOptions)
+```
+
+**Options:**
+```typescript
+interface LoggerOptions {
+  logLevel?: LogLevels;
+  name?: string;
+  active?: boolean;
+  saveOnFile?: boolean;
+}
+```
+
+- `logLevel` - Minimum log level to display (default: `LogLevels.Debug`)
+- `name` - Name of the logger instance (default: `'seyfert'`)
+- `active` - Whether the logger is active (default: `true`)
+- `saveOnFile` - Whether to save logs to a file (default: `false`)
+
+### Log Levels
+
+```typescript
+enum LogLevels {
+  Debug = 0,
+  Info = 1,
+  Warn = 2,
+  Error = 3,
+  Fatal = 4,
+}
+```
+
+Log levels determine which messages are displayed. Messages with a level lower than the configured `logLevel` will be ignored.
+
+### Properties
+
+#### level
+
+Gets or sets the current log level.
+
+```typescript
+get level(): LogLevels
+set level(level: LogLevels)
+```
+
+#### active
+
+Gets or sets whether the logger is active.
+
+```typescript
+get active(): boolean
+set active(active: boolean)
+```
+
+#### name
+
+Gets or sets the logger name.
+
+```typescript
+get name(): string
+set name(name: string)
+```
+
+#### saveOnFile
+
+Gets or sets whether logs are saved to file.
+
+```typescript
+get saveOnFile(): boolean
+set saveOnFile(saveOnFile: boolean)
+```
+
+### Methods
+
+#### debug
+
+Logs a debug message (LogLevels.Debug).
+
+```typescript
+debug(...args: any[]): void
+```
+
+**Example:**
+```typescript
+const logger = new Logger({ name: 'MyBot' });
+logger.debug('Debug information', { userId: '123' });
+```
+
+#### info
+
+Logs an informational message (LogLevels.Info).
+
+```typescript
+info(...args: any[]): void
+```
+
+**Example:**
+```typescript
+logger.info('Bot started successfully');
+```
+
+#### warn
+
+Logs a warning message (LogLevels.Warn).
+
+```typescript
+warn(...args: any[]): void
+```
+
+**Example:**
+```typescript
+logger.warn('Rate limit approaching');
+```
+
+#### error
+
+Logs an error message (LogLevels.Error).
+
+```typescript
+error(...args: any[]): void
+```
+
+**Example:**
+```typescript
+logger.error('Failed to connect to database', error);
+```
+
+#### fatal
+
+Logs a fatal error message (LogLevels.Fatal).
+
+```typescript
+fatal(...args: any[]): void
+```
+
+**Example:**
+```typescript
+logger.fatal('Critical system failure', error);
+```
+
+#### rawLog
+
+Logs a message with a specified log level.
+
+```typescript
+rawLog(level: LogLevels, ...args: unknown[]): void
+```
+
+**Parameters:**
+- `level` - The log level
+- `args` - Arguments to log
+
+### Static Properties
+
+#### dirname
+
+The directory name for log files.
+
+```typescript
+static dirname: string = 'seyfert-logs'
+```
+
+#### saveOnFile
+
+Global configuration for which loggers should save to file.
+
+```typescript
+static saveOnFile?: string[] | 'all'
+```
+
+**Example:**
+```typescript
+// Save all loggers to file
+Logger.saveOnFile = 'all';
+
+// Save specific loggers to file
+Logger.saveOnFile = ['MyBot', 'Database'];
+```
+
+### Static Methods
+
+#### customize
+
+Customizes the logging behavior with a custom callback function.
+
+```typescript
+static customize(cb: CustomizeLoggerCallback): void
+```
+
+**Type:**
+```typescript
+type CustomizeLoggerCallback = (
+  self: Logger,
+  level: LogLevels,
+  args: unknown[]
+) => unknown[] | undefined
+```
+
+**Example:**
+```typescript
+Logger.customize((logger, level, args) => {
+  const timestamp = new Date().toISOString();
+  return [`[${timestamp}]`, `[${logger.name}]`, ...args];
+});
+```
+
+#### customizeFilename
+
+Customizes the log filename with a callback function.
+
+```typescript
+static customizeFilename(cb: AssignFilenameCallback): void
+```
+
+**Type:**
+```typescript
+type AssignFilenameCallback = (self: Logger) => string
+```
+
+**Example:**
+```typescript
+Logger.customizeFilename((logger) => {
+  return `${logger.name}-${Date.now()}.log`;
+});
+```
+
+#### clearLogs
+
+Clears all log files.
+
+```typescript
+static async clearLogs(): Promise<void>
+```
+
+**Example:**
+```typescript
+await Logger.clearLogs();
+```
+
+### Usage Example
+
+```typescript
+import { Logger, LogLevels } from 'seyfert';
+
+// Create a logger instance
+const logger = new Logger({
+  name: 'MyBot',
+  logLevel: LogLevels.Info,
+  saveOnFile: true
+});
+
+// Log different severity levels
+logger.debug('This will not be shown (below Info level)');
+logger.info('Bot is starting...');
+logger.warn('Configuration file is missing, using defaults');
+logger.error('Failed to load plugin', error);
+
+// Change log level dynamically
+logger.level = LogLevels.Debug;
+logger.debug('Now debug messages will show');
+
+// Disable logging temporarily
+logger.active = false;
+logger.info('This will not be logged');
+logger.active = true;
+```
+
+### Customization Example
+
+```typescript
+import { Logger, LogLevels } from 'seyfert';
+
+// Customize log format
+Logger.customize((logger, level, args) => {
+  const levelName = LogLevels[level];
+  const timestamp = new Date().toISOString();
+  return [
+    `[${timestamp}]`,
+    `[${levelName}]`,
+    `[${logger.name}]`,
+    ...args
+  ];
+});
+
+// Customize filename
+Logger.customizeFilename((logger) => {
+  const date = new Date().toISOString().split('T')[0];
+  return `${logger.name}-${date}.log`;
+});
+
+// Enable file logging for all loggers
+Logger.saveOnFile = 'all';
+
+const logger = new Logger({ name: 'MyBot' });
+logger.info('This will be logged with custom format');
+```
+
+### Memory Usage Formatting
+
+The logger automatically includes memory usage information in its output.
+
+```typescript
+function formatMemoryUsage(bytes: number): string
+```
+
+This function formats memory usage into human-readable units (B, KB, MB, GB).

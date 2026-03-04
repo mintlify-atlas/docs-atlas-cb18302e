@@ -1,0 +1,483 @@
+---
+title: Command System
+description: Understanding Seyfert's powerful command architecture
+---
+
+## Overview
+
+Seyfert provides a comprehensive command system supporting chat input commands, context menu commands, and entry point commands. All commands are automatically loaded and registered with Discord.
+
+## Command Types
+
+### Chat Input Commands
+
+Slash commands that users invoke with `/`.
+
+```typescript
+import { Command, type CommandContext } from 'seyfert';
+import { Declare, Options, createStringOption } from 'seyfert/commands';
+
+const options = {
+  name: createStringOption({
+    description: 'User name',
+    required: true
+  })
+};
+
+@Declare({
+  name: 'greet',
+  description: 'Greet a user'
+})
+@Options(options)
+export default class GreetCommand extends Command {
+  async run(ctx: CommandContext<typeof options>) {
+    const name = ctx.options.name;
+    await ctx.write({
+      content: `Hello, ${name}! 👋`
+    });
+  }
+}
+```
+
+### Context Menu Commands
+
+Right-click commands for users and messages.
+
+```typescript
+import { MenuCommand, type MenuCommandContext } from 'seyfert';
+import { Declare } from 'seyfert/commands';
+import { ApplicationCommandType } from 'seyfert/types';
+
+@Declare({
+  name: 'User Info',
+  type: ApplicationCommandType.User
+})
+export default class UserInfoCommand extends MenuCommand {
+  async run(ctx: MenuCommandContext<ApplicationCommandType.User>) {
+    const user = ctx.target;
+    
+    await ctx.write({
+      embeds: [{
+        title: `User Information`,
+        fields: [
+          { name: 'Username', value: user.username },
+          { name: 'ID', value: user.id },
+          { name: 'Created', value: `<t:${Math.floor(Number(user.createdTimestamp) / 1000)}:R>` }
+        ]
+      }]
+    });
+  }
+}
+```
+
+### Entry Point Commands
+
+App launchers for Activities (Discord's embedded apps).
+
+```typescript
+import { EntryPointCommand } from 'seyfert';
+import { Declare } from 'seyfert/commands';
+
+@Declare({
+  name: 'My Activity',
+  description: 'Launch my awesome activity'
+})
+export default class ActivityCommand extends EntryPointCommand {
+  async run(ctx: EntryPointContext) {
+    // Launch your activity
+    await ctx.write({
+      content: 'Starting activity...'
+    });
+  }
+}
+```
+
+## Command Options
+
+Seyfert provides typed option builders for type-safe commands.
+
+### Basic Options
+
+```typescript
+import {
+  createStringOption,
+  createIntegerOption,
+  createBooleanOption,
+  createUserOption,
+  createChannelOption,
+  createRoleOption,
+  createNumberOption,
+  createAttachmentOption
+} from 'seyfert/commands';
+
+const options = {
+  text: createStringOption({
+    description: 'Text input',
+    required: true,
+    max_length: 100
+  }),
+  count: createIntegerOption({
+    description: 'Number of items',
+    min_value: 1,
+    max_value: 100
+  }),
+  enabled: createBooleanOption({
+    description: 'Enable feature'
+  }),
+  user: createUserOption({
+    description: 'Select a user'
+  }),
+  channel: createChannelOption({
+    description: 'Select a channel',
+    channel_types: [ChannelType.GuildText]
+  })
+};
+```
+
+### Choices
+
+```typescript
+const options = {
+  color: createStringOption({
+    description: 'Pick a color',
+    choices: [
+      { name: 'Red', value: 'red' },
+      { name: 'Blue', value: 'blue' },
+      { name: 'Green', value: 'green' }
+    ]
+  })
+};
+```
+
+### Autocomplete
+
+```typescript
+const options = {
+  item: createStringOption({
+    description: 'Search for an item',
+    autocomplete: async (interaction) => {
+      const query = interaction.getInput();
+      const items = await searchDatabase(query);
+      
+      await interaction.respond(
+        items.map(item => ({
+          name: item.name,
+          value: item.id
+        }))
+      );
+    }
+  })
+};
+```
+
+## Subcommands
+
+Organize related commands into groups.
+
+```typescript
+import { Command, SubCommand, type CommandContext } from 'seyfert';
+import { Declare, Options, createStringOption } from 'seyfert/commands';
+
+@Declare({
+  name: 'config',
+  description: 'Bot configuration'
+})
+export default class ConfigCommand extends Command {}
+
+@Declare({
+  name: 'set',
+  description: 'Set a configuration value'
+})
+@Options({
+  key: createStringOption({ description: 'Config key', required: true }),
+  value: createStringOption({ description: 'Config value', required: true })
+})
+export class ConfigSetSubCommand extends SubCommand {
+  async run(ctx: CommandContext) {
+    const { key, value } = ctx.options;
+    // Save config
+    await ctx.write({ content: `Set ${key} = ${value}` });
+  }
+}
+```
+
+<Info>
+  Subcommands must be in the same file or subdirectory as their parent command.
+</Info>
+
+## Command Lifecycle
+
+### Execution Flow
+
+1. **Permission Check** - Verify user and bot permissions
+2. **Middlewares (Before)** - Run `onBeforeMiddlewares`
+3. **Global Middlewares** - Execute global middleware chain
+4. **Command Middlewares** - Execute command-specific middlewares
+5. **Option Validation** - Run `onBeforeOptions` and validate options
+6. **Command Execution** - Call the `run` method
+7. **After Run** - Execute `onAfterRun` hook
+
+### Lifecycle Hooks
+
+```typescript
+@Declare({
+  name: 'example',
+  description: 'Example command'
+})
+export default class ExampleCommand extends Command {
+  // Before middleware execution
+  onBeforeMiddlewares(ctx: CommandContext) {
+    console.log('Preparing to run middlewares');
+  }
+  
+  // Before option parsing
+  onBeforeOptions(ctx: CommandContext) {
+    console.log('Validating options');
+  }
+  
+  // After command execution (success or error)
+  async onAfterRun(ctx: CommandContext, error?: unknown) {
+    if (error) {
+      console.error('Command failed:', error);
+    } else {
+      console.log('Command succeeded');
+    }
+  }
+  
+  // Handle runtime errors
+  async onRunError(ctx: CommandContext, error: unknown) {
+    await ctx.editOrReply({
+      content: '❌ Something went wrong!'
+    });
+  }
+  
+  // Handle permission failures
+  async onPermissionsFail(ctx: CommandContext, permissions: string) {
+    await ctx.write({
+      content: `You need ${permissions} permission!`
+    });
+  }
+  
+  async run(ctx: CommandContext) {
+    // Command logic
+  }
+}
+```
+
+## Middlewares
+
+Middlewares allow you to run logic before command execution.
+
+### Defining Middlewares
+
+```typescript
+// src/middlewares/admin.ts
+import type { CommandContext, MiddlewareContext } from 'seyfert';
+
+export async function adminOnly(ctx: CommandContext) {
+  const adminIds = ['123456789'];
+  
+  if (!adminIds.includes(ctx.author.id)) {
+    await ctx.write({ content: 'Admin only!', flags: MessageFlags.Ephemeral });
+    return ctx.stop();
+  }
+  
+  return ctx.next();
+}
+
+declare module 'seyfert' {
+  interface RegisteredMiddlewares {
+    adminOnly: typeof adminOnly;
+  }
+}
+```
+
+### Using Middlewares
+
+```typescript
+import { Command } from 'seyfert';
+import { Declare, Middlewares } from 'seyfert/commands';
+
+@Declare({
+  name: 'admin',
+  description: 'Admin command'
+})
+@Middlewares(['adminOnly'])
+export default class AdminCommand extends Command {
+  async run(ctx: CommandContext) {
+    await ctx.write({ content: 'Admin access granted!' });
+  }
+}
+```
+
+## Permissions
+
+### User Permissions
+
+```typescript
+import { Declare } from 'seyfert/commands';
+import { PermissionFlagsBits } from 'seyfert/types';
+
+@Declare({
+  name: 'ban',
+  description: 'Ban a user',
+  defaultMemberPermissions: PermissionFlagsBits.BanMembers
+})
+export default class BanCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Only users with BanMembers permission can use this
+  }
+}
+```
+
+### Bot Permissions
+
+```typescript
+import { Command } from 'seyfert';
+import { Declare } from 'seyfert/commands';
+import { PermissionFlagsBits } from 'seyfert/types';
+
+@Declare({
+  name: 'announce',
+  description: 'Send announcement',
+  botPermissions: PermissionFlagsBits.ManageMessages | PermissionFlagsBits.SendMessages
+})
+export default class AnnounceCommand extends Command {
+  async onBotPermissionsFail(ctx: CommandContext, permissions: string) {
+    await ctx.write({
+      content: `I need ${permissions} permissions!`
+    });
+  }
+  
+  async run(ctx: CommandContext) {
+    // Bot has required permissions
+  }
+}
+```
+
+## Guild-Only Commands
+
+Restrict commands to specific guilds:
+
+```typescript
+@Declare({
+  name: 'testcmd',
+  description: 'Testing command',
+  guildId: ['1234567890', '0987654321']
+})
+export default class TestCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Only available in specified guilds
+  }
+}
+```
+
+## Command Context
+
+The `CommandContext` provides access to the interaction and utilities.
+
+```typescript
+class MyCommand extends Command {
+  async run(ctx: CommandContext) {
+    // Interaction data
+    ctx.interaction;  // Raw interaction
+    ctx.author;       // User who ran command
+    ctx.guild;        // Guild (if in guild)
+    ctx.channel;      // Channel
+    ctx.member;       // Member (if in guild)
+    ctx.options;      // Typed command options
+    
+    // Response methods
+    await ctx.write({ content: 'Initial response' });
+    await ctx.editOrReply({ content: 'Update or reply' });
+    await ctx.deferReply(); // Show "thinking" state
+    await ctx.editResponse({ content: 'Deferred response' });
+    
+    // Client access
+    ctx.client;       // Access to client instance
+    
+    // Localization
+    const t = ctx.t('key'); // Get localized string
+  }
+}
+```
+
+## Integration Types & Contexts
+
+Control where commands can be used:
+
+```typescript
+import { ApplicationIntegrationType, InteractionContextType } from 'seyfert/types';
+
+@Declare({
+  name: 'profile',
+  description: 'View profile',
+  integrationTypes: [
+    ApplicationIntegrationType.GuildInstall,
+    ApplicationIntegrationType.UserInstall
+  ],
+  contexts: [
+    InteractionContextType.Guild,
+    InteractionContextType.BotDM,
+    InteractionContextType.PrivateChannel
+  ]
+})
+export default class ProfileCommand extends Command {}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Type Safety">
+    Always use the `Options` decorator and type your context:
+    
+    ```typescript
+    @Options(options)
+    export default class MyCommand extends Command {
+      async run(ctx: CommandContext<typeof options>) {
+        // options are fully typed
+        const name = ctx.options.name; // ✓ Type-safe
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Error Handling">
+    Implement error handlers to provide user feedback:
+    
+    ```typescript
+    async onRunError(ctx: CommandContext, error: unknown) {
+      console.error(error);
+      await ctx.editOrReply({
+        content: 'An error occurred!',
+        flags: MessageFlags.Ephemeral
+      });
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Defer Long Operations">
+    For commands that take >3 seconds:
+    
+    ```typescript
+    async run(ctx: CommandContext) {
+      await ctx.deferReply();
+      
+      const result = await longRunningOperation();
+      
+      await ctx.editResponse({ content: result });
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Events" icon="bolt" href="/concepts/events">
+    Handle Discord events
+  </Card>
+  <Card title="Components" icon="grid" href="/concepts/components">
+    Add interactive components
+  </Card>
+</CardGroup>

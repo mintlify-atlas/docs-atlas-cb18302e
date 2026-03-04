@@ -1,0 +1,660 @@
+---
+title: "Collectors"
+description: "Capture and handle Discord events with Seyfert's flexible collector system"
+---
+
+## Overview
+
+Seyfert provides two collector systems:
+1. **Component Collectors** - Collect button clicks and select menu interactions on messages
+2. **Event Collectors** - Collect any Discord gateway event (messages, reactions, etc.)
+
+Both systems support filtering, timeouts, idle detection, and error handling.
+
+## Component Collectors
+
+Component collectors listen for interactions on message components (buttons, select menus).
+
+### Basic Usage
+
+```typescript
+import { MessageFlags } from 'seyfert/lib/types';
+
+const message = await ctx.write({
+  content: 'Click a button!',
+  components: [
+    {
+      type: 1, // Action row
+      components: [
+        {
+          type: 2, // Button
+          style: 1, // Primary
+          custom_id: 'confirm',
+          label: 'Confirm'
+        },
+        {
+          type: 2,
+          style: 4, // Danger
+          custom_id: 'cancel',
+          label: 'Cancel'
+        }
+      ]
+    }
+  ]
+});
+
+// Create collector
+const collector = message.createComponentCollector();
+
+// Listen for confirm button
+collector.run('confirm', async (interaction) => {
+  await interaction.write({
+    content: '✅ Confirmed!',
+    flags: MessageFlags.Ephemeral
+  });
+});
+
+// Listen for cancel button
+collector.run('cancel', async (interaction) => {
+  await interaction.write({
+    content: '❌ Cancelled!',
+    flags: MessageFlags.Ephemeral
+  });
+});
+```
+
+### Collector Options
+
+Configure timeout, idle detection, filtering, and callbacks:
+
+```typescript
+const collector = message.createComponentCollector({
+  // Stop after 60 seconds
+  timeout: 60_000,
+  
+  // Stop after 15 seconds of no interactions
+  idle: 15_000,
+  
+  // Only allow specific users
+  filter: async (interaction) => {
+    return interaction.user.id === ctx.author.id;
+  },
+  
+  // Called when filter returns false
+  onPass: async (interaction) => {
+    await interaction.write({
+      content: '⛔ This button is not for you!',
+      flags: MessageFlags.Ephemeral
+    });
+  },
+  
+  // Called when collector stops
+  onStop: (reason, restart) => {
+    console.log(`Collector stopped: ${reason}`);
+    // Optionally restart the collector
+    // restart();
+  },
+  
+  // Handle errors in callbacks
+  onError: async (interaction, error, stop, refresh) => {
+    console.error('Component error:', error);
+    await interaction.write({
+      content: '❌ An error occurred.',
+      flags: MessageFlags.Ephemeral
+    });
+    // Optionally stop collector on error
+    stop('error');
+  }
+});
+```
+
+### Pattern Matching
+
+Match custom IDs using strings, arrays, or regex:
+
+```typescript
+// Exact match (string)
+collector.run('confirm', handler);
+
+// Multiple IDs (array)
+collector.run(['yes', 'confirm', 'accept'], handler);
+
+// Pattern matching (regex)
+collector.run(/^action_\d+$/, async (interaction) => {
+  const actionId = interaction.customId.split('_')[1];
+  console.log(`Action ${actionId} triggered`);
+});
+```
+
+### Manual Control
+
+Control collector lifecycle programmatically:
+
+```typescript
+const collector = message.createComponentCollector({
+  timeout: 60_000
+});
+
+collector.run('button_id', async (interaction, stop, refresh) => {
+  // Stop the collector manually
+  stop('user_completed');
+  
+  // Or reset the idle timer
+  refresh();
+  
+  // Or reset all timeouts
+  collector.resetTimeouts();
+});
+
+// Stop from outside the handler
+collector.stop('manual_stop');
+```
+
+### Wait for Specific Interaction
+
+Wait for a single interaction instead of continuous listening:
+
+```typescript
+const message = await ctx.write({
+  content: 'Click confirm to continue',
+  components: [/* ... */]
+});
+
+const collector = message.createComponentCollector();
+
+// Wait for confirmation (max 30 seconds)
+const interaction = await collector.waitFor('confirm', 30_000);
+
+if (interaction) {
+  await interaction.write({ content: '✅ Confirmed!' });
+} else {
+  await ctx.editOrReply({ content: '⏱️ Timed out!' });
+}
+```
+
+### Select Menu Collectors
+
+Handle select menu interactions:
+
+```typescript
+const message = await ctx.write({
+  content: 'Choose an option:',
+  components: [
+    {
+      type: 1,
+      components: [
+        {
+          type: 3, // String select
+          custom_id: 'role_select',
+          placeholder: 'Select a role',
+          options: [
+            { label: 'Member', value: 'member', emoji: { name: '👤' } },
+            { label: 'Moderator', value: 'mod', emoji: { name: '🛡️' } },
+            { label: 'Admin', value: 'admin', emoji: { name: '⚡' } }
+          ]
+        }
+      ]
+    }
+  ]
+});
+
+const collector = message.createComponentCollector();
+
+collector.run('role_select', async (interaction) => {
+  // interaction is typed as StringSelectMenuInteraction
+  const selected = interaction.values[0];
+  
+  await interaction.write({
+    content: `You selected: ${selected}`,
+    flags: MessageFlags.Ephemeral
+  });
+});
+```
+
+## Event Collectors
+
+Collect any Discord gateway event (messages, reactions, voice state updates, etc.).
+
+### Basic Usage
+
+```typescript
+import type { Message } from 'seyfert/lib/structures';
+
+// Collect messages in a channel
+client.collectors.create({
+  event: 'MESSAGE_CREATE',
+  
+  // Filter: only messages from specific user in specific channel
+  filter: async (message: Message) => {
+    return message.author.id === userId && 
+           message.channelId === channelId;
+  },
+  
+  // Handler for each collected message
+  run: async (message: Message, stop) => {
+    console.log(`Collected: ${message.content}`);
+    
+    if (message.content.toLowerCase() === 'stop') {
+      stop('user_requested');
+    }
+  }
+});
+```
+
+### With Timeouts
+
+```typescript
+client.collectors.create({
+  event: 'MESSAGE_CREATE',
+  timeout: 60_000,  // Stop after 60 seconds
+  idle: 10_000,      // Stop after 10 seconds of no messages
+  
+  filter: async (message) => message.channelId === channelId,
+  
+  run: async (message, stop) => {
+    // Process message
+  },
+  
+  onStop: (reason) => {
+    console.log(`Collection ended: ${reason}`);
+  }
+});
+```
+
+### Reaction Collectors
+
+```typescript
+import type { MessageReactionAdd } from 'seyfert/lib/types';
+
+const message = await ctx.write({ content: 'React to vote!' });
+
+// Add initial reactions
+await message.react('👍');
+await message.react('👎');
+
+const votes = { up: 0, down: 0 };
+
+client.collectors.create({
+  event: 'MESSAGE_REACTION_ADD',
+  timeout: 30_000,
+  
+  filter: async (data: MessageReactionAdd) => {
+    return data.message_id === message.id;
+  },
+  
+  run: async (data: MessageReactionAdd) => {
+    if (data.emoji.name === '👍') votes.up++;
+    if (data.emoji.name === '👎') votes.down++;
+  },
+  
+  onStop: async (reason) => {
+    await ctx.channel()?.messages.write(message.channelId, {
+      content: `Voting ended! 👍 ${votes.up} | 👎 ${votes.down}`
+    });
+  }
+});
+```
+
+### Voice State Collectors
+
+```typescript
+client.collectors.create({
+  event: 'VOICE_STATE_UPDATE',
+  
+  filter: async (state) => {
+    return state.channel_id === targetChannelId;
+  },
+  
+  run: async (state, stop) => {
+    console.log(`User ${state.user_id} updated voice state`);
+  }
+});
+```
+
+### Custom Event Collectors
+
+```typescript
+import type { GuildMemberAdd } from 'seyfert/lib/types';
+
+// Welcome new members
+client.collectors.create({
+  event: 'GUILD_MEMBER_ADD',
+  
+  filter: async (member: GuildMemberAdd) => {
+    return member.guild_id === guildId;
+  },
+  
+  run: async (member: GuildMemberAdd) => {
+    const welcomeChannel = await client.channels.fetch(welcomeChannelId);
+    if (!welcomeChannel?.isTextable()) return;
+    
+    await welcomeChannel.messages.write(welcomeChannel.id, {
+      content: `Welcome <@${member.user.id}> to the server!`
+    });
+  }
+});
+```
+
+### Error Handling
+
+```typescript
+client.collectors.create({
+  event: 'MESSAGE_CREATE',
+  
+  filter: async (message) => true,
+  
+  run: async (message, stop) => {
+    // This error will be caught by onRunError
+    throw new Error('Processing failed!');
+  },
+  
+  onRunError: async (message, error, stop) => {
+    console.error('Collector error:', error);
+    // Optionally stop on error
+    stop('error');
+  },
+  
+  onStopError: (reason, error) => {
+    console.error('Error in onStop callback:', error);
+  }
+});
+```
+
+## Practical Examples
+
+### Quiz Bot
+
+```typescript
+async function runQuiz(ctx: CommandContext) {
+  const questions = [
+    { q: 'What is 2+2?', a: '4' },
+    { q: 'What color is the sky?', a: 'blue' }
+  ];
+  
+  let currentQ = 0;
+  let score = 0;
+  
+  await ctx.write({ content: questions[0].q });
+  
+  client.collectors.create({
+    event: 'MESSAGE_CREATE',
+    timeout: 60_000,
+    idle: 15_000,
+    
+    filter: async (msg) => {
+      return msg.author.id === ctx.author.id &&
+             msg.channelId === ctx.channelId;
+    },
+    
+    run: async (msg, stop) => {
+      const correct = msg.content.toLowerCase() === questions[currentQ].a;
+      
+      if (correct) {
+        score++;
+        await msg.react('✅');
+      } else {
+        await msg.react('❌');
+      }
+      
+      currentQ++;
+      
+      if (currentQ >= questions.length) {
+        await ctx.write({ 
+          content: `Quiz complete! Score: ${score}/${questions.length}` 
+        });
+        stop('completed');
+      } else {
+        await ctx.write({ content: questions[currentQ].q });
+      }
+    }
+  });
+}
+```
+
+### Pagination with Buttons
+
+```typescript
+async function paginate(ctx: CommandContext, pages: string[]) {
+  let currentPage = 0;
+  
+  const message = await ctx.write({
+    content: pages[0],
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 2,
+            style: 1,
+            custom_id: 'prev',
+            label: '◀️ Previous',
+            disabled: true
+          },
+          {
+            type: 2,
+            style: 1,
+            custom_id: 'next',
+            label: 'Next ▶️',
+            disabled: pages.length === 1
+          }
+        ]
+      }
+    ]
+  });
+  
+  const collector = message.createComponentCollector({
+    timeout: 120_000,
+    filter: async (i) => i.user.id === ctx.author.id
+  });
+  
+  collector.run(['prev', 'next'], async (interaction) => {
+    if (interaction.customId === 'next') currentPage++;
+    if (interaction.customId === 'prev') currentPage--;
+    
+    await interaction.update({
+      content: pages[currentPage],
+      components: [
+        {
+          type: 1,
+          components: [
+            {
+              type: 2,
+              style: 1,
+              custom_id: 'prev',
+              label: '◀️ Previous',
+              disabled: currentPage === 0
+            },
+            {
+              type: 2,
+              style: 1,
+              custom_id: 'next',
+              label: 'Next ▶️',
+              disabled: currentPage === pages.length - 1
+            }
+          ]
+        }
+      ]
+    });
+  });
+}
+```
+
+### Confirmation Prompt
+
+```typescript
+async function confirm(
+  ctx: CommandContext, 
+  prompt: string
+): Promise<boolean> {
+  const message = await ctx.write({
+    content: prompt,
+    components: [
+      {
+        type: 1,
+        components: [
+          { type: 2, style: 3, custom_id: 'yes', label: 'Yes' },
+          { type: 2, style: 4, custom_id: 'no', label: 'No' }
+        ]
+      }
+    ]
+  });
+  
+  const collector = message.createComponentCollector({
+    filter: async (i) => i.user.id === ctx.author.id
+  });
+  
+  const interaction = await collector.waitFor(['yes', 'no'], 30_000);
+  
+  if (!interaction) {
+    await message.edit({ content: '⏱️ Timed out.', components: [] });
+    return false;
+  }
+  
+  await interaction.deferUpdate();
+  await message.edit({ components: [] });
+  
+  return interaction.customId === 'yes';
+}
+
+// Usage
+const confirmed = await confirm(ctx, 'Are you sure you want to delete this?');
+if (confirmed) {
+  // Proceed with deletion
+}
+```
+
+## Available Events
+
+You can collect any Discord gateway event:
+
+<Tabs>
+  <Tab title="Message Events">
+    - `MESSAGE_CREATE`
+    - `MESSAGE_UPDATE`
+    - `MESSAGE_DELETE`
+    - `MESSAGE_REACTION_ADD`
+    - `MESSAGE_REACTION_REMOVE`
+  </Tab>
+  
+  <Tab title="Guild Events">
+    - `GUILD_CREATE`
+    - `GUILD_UPDATE`
+    - `GUILD_DELETE`
+    - `GUILD_MEMBER_ADD`
+    - `GUILD_MEMBER_UPDATE`
+    - `GUILD_MEMBER_REMOVE`
+  </Tab>
+  
+  <Tab title="Channel Events">
+    - `CHANNEL_CREATE`
+    - `CHANNEL_UPDATE`
+    - `CHANNEL_DELETE`
+    - `THREAD_CREATE`
+    - `THREAD_UPDATE`
+  </Tab>
+  
+  <Tab title="Voice Events">
+    - `VOICE_STATE_UPDATE`
+    - `VOICE_SERVER_UPDATE`
+  </Tab>
+  
+  <Tab title="Other Events">
+    - `INTERACTION_CREATE`
+    - `PRESENCE_UPDATE`
+    - `TYPING_START`
+    - `RAW` (all events)
+  </Tab>
+</Tabs>
+
+See `src/client/collectors.ts:7` for the complete type definitions.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Set Timeouts" icon="clock">
+    Prevent memory leaks by always setting a timeout:
+    ```typescript
+    collector.create({
+      timeout: 60_000, // Required!
+      // ...
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Use Filters Wisely" icon="filter">
+    Keep filters simple and fast:
+    ```typescript
+    // ✅ Good - simple check
+    filter: async (msg) => msg.author.id === userId
+    
+    // ❌ Bad - expensive operation
+    filter: async (msg) => {
+      const data = await database.query(/* ... */);
+      return data.includes(msg.author.id);
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Timeout in onStop" icon="bell">
+    Always handle the timeout case:
+    ```typescript
+    onStop: (reason) => {
+      if (reason === 'timeout') {
+        ctx.editOrReply({ content: '⏱️ Timed out!' });
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Clean Up Components" icon="broom">
+    Disable buttons when collector stops:
+    ```typescript
+    onStop: async () => {
+      await message.edit({ components: [] });
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Prefer Component Commands for Simple Cases" icon="code">
+    For permanent component handlers, use ComponentCommand instead:
+    ```typescript
+    // Better for persistent buttons
+    export default class MyButton extends ComponentCommand {
+      customId = 'my_button';
+      async run(ctx: ComponentContext) {
+        // ...
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Collectors store event handlers in memory. Always set timeouts and clean up when done to prevent memory leaks.
+</Warning>
+
+## Comparison: Collectors vs Component Commands
+
+| Feature | Collectors | Component Commands |
+|---------|-----------|-------------------|
+| **Use case** | Temporary, context-specific | Permanent, global handlers |
+| **Lifetime** | Until timeout/stop | Application lifetime |
+| **Filtering** | Built-in filter support | Manual filtering in run() |
+| **Memory** | Higher (event storage) | Lower |
+| **Best for** | Wizards, confirmations, pagination | Persistent UI elements |
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Component Commands" icon="window" href="/api/components">
+    Learn about persistent component handlers
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors in collectors properly
+  </Card>
+  
+  <Card title="Message Components" icon="grid" href="/components/buttons">
+    Build buttons and select menus
+  </Card>
+</CardGroup>

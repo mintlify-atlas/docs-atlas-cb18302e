@@ -1,0 +1,584 @@
+---
+title: HTTP-Only Mode
+description: Run your Discord bot without WebSocket connections for serverless deployments
+---
+
+HTTP-only mode allows you to run Discord bots in serverless environments (AWS Lambda, Cloudflare Workers, Vercel) by handling interactions via HTTP webhooks instead of maintaining a WebSocket connection.
+
+## Overview
+
+Traditional Discord bots maintain a persistent WebSocket connection to receive events. HTTP-only bots instead:
+
+1. Register an HTTP endpoint with Discord
+2. Receive interactions via POST requests
+3. Verify request signatures
+4. Respond to interactions directly
+
+**Benefits:**
+- No persistent connection required
+- Scales automatically with serverless platforms
+- Pay only for actual usage
+- Cold start considerations instead of 24/7 hosting
+
+**Limitations:**
+- Cannot receive gateway events (messages, presences, etc.)
+- Only handles slash commands, buttons, modals, and select menus
+- No access to cache (unless you implement external caching)
+- No "online" presence
+
+## Quick Start
+
+### Configuration
+
+Create a `seyfert.config.ts` file using `config.http()`:
+
+```typescript
+import { config } from 'seyfert';
+
+export default config.http({
+  // Required: Your application's public key (from Discord Developer Portal)
+  publicKey: process.env.DISCORD_PUBLIC_KEY!,
+  
+  // Required: Your application ID
+  applicationId: process.env.DISCORD_APP_ID!,
+  
+  // Required: Bot token for API requests
+  token: process.env.DISCORD_TOKEN!,
+  
+  // Optional: Port for local development
+  port: 8080,
+  
+  // Locations for commands, components, etc.
+  locations: {
+    base: 'src',
+    commands: 'commands',
+    components: 'components'
+  }
+});
+```
+
+Source: [src/index.ts:76-89](file:///home/daytona/workspace/source/src/index.ts:76)
+
+### Basic HTTP Client
+
+```typescript
+import { HttpClient } from 'seyfert';
+
+const client = new HttpClient();
+
+await client.start();
+```
+
+Source: [src/client/httpclient.ts:5-14](file:///home/daytona/workspace/source/src/client/httpclient.ts:5)
+
+## Deployment Examples
+
+### Node.js HTTP Server
+
+```typescript
+import { HttpClient } from 'seyfert';
+import { createServer } from 'http';
+
+const client = new HttpClient();
+
+await client.start({
+  httpConnection: {
+    publicKey: process.env.DISCORD_PUBLIC_KEY!,
+    port: Number(process.env.PORT) || 8080
+  }
+});
+
+const server = createServer(async (req, res) => {
+  if (req.method === 'POST' && req.url === '/interactions') {
+    let body = '';
+    
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    
+    req.on('end', async () => {
+      try {
+        const signature = req.headers['x-signature-ed25519'] as string;
+        const timestamp = req.headers['x-signature-timestamp'] as string;
+        
+        // Verify and handle interaction
+        const result = await client.onInteractionRequest(
+          JSON.parse(body)
+        );
+        
+        // Set response headers
+        Object.entries(result.headers).forEach(([key, value]) => {
+          res.setHeader(key, value!);
+        });
+        
+        // Send response
+        if (result.response instanceof FormData) {
+          // Handle file uploads
+          const boundary = result.response.get('boundary');
+          res.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+          // Send FormData...
+        } else {
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(result.response));
+        }
+      } catch (error) {
+        res.statusCode = 401;
+        res.end('Invalid signature');
+      }
+    });
+  } else {
+    res.statusCode = 404;
+    res.end('Not found');
+  }
+});
+
+server.listen(8080, () => {
+  console.log('Bot listening on port 8080');
+});
+```
+
+Source: [src/client/base.ts:289-323](file:///home/daytona/workspace/source/src/client/base.ts:289)
+
+### Express.js Integration
+
+```typescript
+import { HttpClient } from 'seyfert';
+import express from 'express';
+
+const client = new HttpClient();
+const app = express();
+
+await client.start({
+  httpConnection: {
+    publicKey: process.env.DISCORD_PUBLIC_KEY!,
+    port: 8080
+  }
+});
+
+app.post('/interactions', express.json(), async (req, res) => {
+  try {
+    const result = await client.onInteractionRequest(req.body);
+    
+    // Set headers
+    Object.entries(result.headers).forEach(([key, value]) => {
+      if (value) res.setHeader(key, value);
+    });
+    
+    // Send response
+    if (result.response instanceof FormData) {
+      // Handle multipart form data for file uploads
+      res.status(200).send(result.response);
+    } else {
+      res.status(200).json(result.response);
+    }
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid signature' });
+  }
+});
+
+app.listen(8080, () => {
+  console.log('Listening on port 8080');
+});
+```
+
+### Cloudflare Workers
+
+```typescript
+import { HttpClient } from 'seyfert';
+
+const client = new HttpClient();
+
+// Initialize client
+await client.start({
+  httpConnection: {
+    publicKey: env.DISCORD_PUBLIC_KEY,
+    port: 0 // Not used in Cloudflare Workers
+  }
+});
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    if (request.method === 'POST' && new URL(request.url).pathname === '/interactions') {
+      try {
+        const body = await request.json();
+        const result = await client.onInteractionRequest(body);
+        
+        if (result.response instanceof FormData) {
+          return new Response(result.response);
+        }
+        
+        return new Response(
+          JSON.stringify(result.response),
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              ...result.headers
+            }
+          }
+        );
+      } catch (error) {
+        return new Response('Invalid signature', { status: 401 });
+      }
+    }
+    
+    return new Response('Not found', { status: 404 });
+  }
+};
+```
+
+<Info>
+  Cloudflare Workers have special handling in Seyfert. The framework automatically detects the environment and adapts accordingly.
+</Info>
+
+### AWS Lambda
+
+```typescript
+import { HttpClient } from 'seyfert';
+import type { APIGatewayProxyHandler } from 'aws-lambda';
+
+const client = new HttpClient();
+
+await client.start({
+  httpConnection: {
+    publicKey: process.env.DISCORD_PUBLIC_KEY!,
+    port: 0
+  }
+});
+
+export const handler: APIGatewayProxyHandler = async (event) => {
+  if (event.httpMethod === 'POST' && event.path === '/interactions') {
+    try {
+      const body = JSON.parse(event.body || '{}');
+      const result = await client.onInteractionRequest(body);
+      
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...result.headers
+        },
+        body: result.response instanceof FormData 
+          ? '' // Handle FormData separately
+          : JSON.stringify(result.response)
+      };
+    } catch (error) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'Invalid signature' })
+      };
+    }
+  }
+  
+  return {
+    statusCode: 404,
+    body: 'Not found'
+  };
+};
+```
+
+### Vercel Serverless Functions
+
+```typescript
+import { HttpClient } from 'seyfert';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+const client = new HttpClient();
+
+await client.start({
+  httpConnection: {
+    publicKey: process.env.DISCORD_PUBLIC_KEY!,
+    port: 0
+  }
+});
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'POST') {
+    try {
+      const result = await client.onInteractionRequest(req.body);
+      
+      // Set headers
+      Object.entries(result.headers).forEach(([key, value]) => {
+        if (value) res.setHeader(key, value);
+      });
+      
+      if (result.response instanceof FormData) {
+        return res.status(200).send(result.response);
+      }
+      
+      return res.status(200).json(result.response);
+    } catch (error) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+  }
+  
+  return res.status(404).send('Not found');
+}
+```
+
+## Configuring Discord
+
+After deploying your HTTP endpoint, configure Discord to send interactions there:
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Select your application
+3. Navigate to "General Information"
+4. Set **Interactions Endpoint URL** to your deployed endpoint:
+   - Example: `https://your-domain.com/interactions`
+   - Example: `https://your-worker.workers.dev/interactions`
+5. Discord will send a verification request - your app must respond correctly
+
+<Warning>
+  Discord requires your endpoint to respond to `PING` interactions with `PONG` during verification. Seyfert handles this automatically in `onInteractionRequest`.
+</Warning>
+
+## Request Signature Verification
+
+Discord signs all requests with Ed25519. Seyfert automatically verifies signatures in `onInteractionRequest` using the `publicKey` from your config.
+
+**Security is critical:** Always verify signatures to prevent unauthorized requests.
+
+```typescript
+// Seyfert handles this internally
+const result = await client.onInteractionRequest(body);
+// If signature is invalid, this throws an error
+```
+
+Source: [src/client/base.ts:289-323](file:///home/daytona/workspace/source/src/client/base.ts:289)
+
+## Responding to Interactions
+
+HTTP-only mode requires immediate responses (within 3 seconds). Use the same command structure as gateway bots:
+
+```typescript
+import { Command, Declare, Options } from 'seyfert';
+
+@Declare({
+  name: 'ping',
+  description: 'Ping command'
+})
+@Options([])
+export default class PingCommand extends Command {
+  async run(ctx) {
+    // Respond immediately
+    await ctx.write({
+      content: 'Pong!'
+    });
+  }
+}
+```
+
+### Deferred Responses
+
+For long-running operations:
+
+```typescript
+import { Command, Declare, Options } from 'seyfert';
+
+@Declare({
+  name: 'process',
+  description: 'Long operation'
+})
+@Options([])
+export default class ProcessCommand extends Command {
+  async run(ctx) {
+    // Defer the response
+    await ctx.deferReply();
+    
+    // Do long operation
+    await doSomethingThatTakesTime();
+    
+    // Edit the deferred response
+    await ctx.editOrReply({
+      content: 'Processing complete!'
+    });
+  }
+}
+```
+
+## File Uploads
+
+When commands include file attachments, `onInteractionRequest` returns `FormData`:
+
+```typescript
+const result = await client.onInteractionRequest(body);
+
+if (result.response instanceof FormData) {
+  // Handle multipart form data
+  res.setHeader('Content-Type', `multipart/form-data; boundary=${boundary}`);
+  // Send FormData response
+} else {
+  // Regular JSON response
+  res.json(result.response);
+}
+```
+
+Source: [src/client/base.ts:297-323](file:///home/daytona/workspace/source/src/client/base.ts:297)
+
+## Environment Variables
+
+Typical environment variables for HTTP-only mode:
+
+```bash
+DISCORD_PUBLIC_KEY=your_public_key_here
+DISCORD_APP_ID=your_application_id
+DISCORD_TOKEN=your_bot_token
+PORT=8080
+```
+
+## Commands and Components
+
+HTTP-only mode supports:
+
+✅ **Supported:**
+- Slash commands (chat input)
+- User context menu commands
+- Message context menu commands
+- Buttons
+- Select menus
+- Modals
+- Autocomplete
+
+❌ **Not Supported:**
+- Gateway events (MESSAGE_CREATE, GUILD_CREATE, etc.)
+- Message commands (prefix-based)
+- Presence updates
+- Voice connections
+- Real-time events
+
+## Deploying Commands
+
+Upload slash commands to Discord:
+
+```typescript
+import { HttpClient } from 'seyfert';
+
+const client = new HttpClient();
+
+await client.start();
+
+// Upload commands globally
+await client.uploadCommands();
+
+console.log('Commands uploaded!');
+```
+
+Or for a specific guild (faster updates during development):
+
+```typescript
+await client.uploadCommands({
+  applicationId: process.env.DISCORD_APP_ID,
+  guildId: '123456789012345678' // Your test guild
+});
+```
+
+## Comparison: HTTP vs Gateway
+
+| Feature | Gateway Mode | HTTP-Only Mode |
+|---------|-------------|----------------|
+| **Deployment** | 24/7 server required | Serverless-friendly |
+| **Cost** | Fixed hosting cost | Pay per invocation |
+| **Scalability** | Sharding required | Auto-scales |
+| **Events** | All gateway events | Interactions only |
+| **Latency** | Real-time | Cold starts possible |
+| **Cache** | Built-in | External only |
+| **Presence** | Can set status | No presence |
+| **Use Case** | Full-featured bots | Slash command bots |
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep endpoints fast">
+    Serverless platforms have timeout limits (typically 10-30 seconds). Always use `deferReply()` for operations that take more than 2-3 seconds:
+    
+    ```typescript
+    async run(ctx) {
+      await ctx.deferReply();
+      // Now you have up to 15 minutes
+      await longOperation();
+      await ctx.editOrReply({ content: 'Done!' });
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle cold starts">
+    Serverless functions may have cold starts. Consider:
+    - Using `deferReply()` immediately to avoid timeout
+    - Keeping dependencies minimal
+    - Using provisioned concurrency (AWS Lambda) or warming strategies
+  </Accordion>
+  
+  <Accordion title="Don't store state in memory">
+    HTTP functions are stateless. Use external storage:
+    
+    ```typescript
+    // Bad: Lost on cold start
+    const userScores = new Map();
+    
+    // Good: Persistent
+    const scores = await redis.get(`score:${userId}`);
+    ```
+  </Accordion>
+  
+  <Accordion title="Use environment variables for secrets">
+    Never hardcode secrets. Use your platform's secret management:
+    
+    ```typescript
+    // Good
+    publicKey: process.env.DISCORD_PUBLIC_KEY
+    
+    // Bad
+    publicKey: 'abcdef1234567890...' // Never do this!
+    ```
+  </Accordion>
+  
+  <Accordion title="Test signature verification locally">
+    Discord won't accept your endpoint if signature verification fails. Test locally using ngrok or similar:
+    
+    ```bash
+    ngrok http 8080
+    # Use the ngrok URL in Discord Developer Portal
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### "Invalid signature" errors
+
+```typescript
+// Ensure publicKey is correct
+publicKey: process.env.DISCORD_PUBLIC_KEY // From Developer Portal
+
+// Ensure you're passing the raw body (not parsed JSON for verification)
+// Seyfert expects the interaction object, verification happens internally
+```
+
+### "Endpoint verification failed"
+
+Discord sends a PING (type 1) interaction during verification. Seyfert handles this automatically, but ensure:
+
+1. Your endpoint is publicly accessible
+2. Signature verification is working
+3. You're responding within 3 seconds
+
+### Cold start timeouts
+
+```typescript
+// Always defer for potentially slow operations
+async run(ctx) {
+  await ctx.deferReply(); // Respond within 3 seconds
+  await slowOperation(); // Now you have 15 minutes
+  await ctx.editOrReply({ content: 'Done!' });
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Commands" icon="terminal" href="/commands/chat-commands">
+    Learn how to create slash commands
+  </Card>
+  <Card title="Components" icon="grid" href="/components/buttons">
+    Add buttons and select menus
+  </Card>
+</CardGroup>

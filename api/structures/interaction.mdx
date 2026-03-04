@@ -1,0 +1,749 @@
+---
+title: Interaction
+description: API reference for Interaction classes in Seyfert
+---
+
+Seyfert provides various interaction classes for handling different types of Discord interactions. All interaction classes extend from `BaseInteraction`.
+
+## BaseInteraction
+
+The base class for all interactions.
+
+```typescript
+class BaseInteraction<FromGuild extends boolean = boolean>
+```
+
+### Properties
+
+- `id: string` - Interaction ID
+- `applicationId: string` - Application ID
+- `type: InteractionType` - Type of interaction
+- `token: string` - Interaction token
+- `version: number` - Interaction version
+- `guildId?: string` - Guild ID (if invoked in a guild)
+- `channelId?: string` - Channel ID
+- `locale?: string` - User's locale
+- `guildLocale?: string` - Guild's locale
+- `user: User` - User who triggered the interaction
+- `member?: InteractionGuildMember` - Guild member (if in a guild)
+- `channel?: AllChannels` - Channel where interaction was triggered
+- `message?: Message` - Message associated with interaction (for components)
+- `appPermissions: PermissionsBitField` - App permissions in the channel
+- `entitlements: Entitlement[]` - Entitlements for the user
+- `replied?: Promise<boolean> | boolean` - Whether interaction has been replied to
+- `deferred?: boolean` - Whether interaction has been deferred
+
+### Methods
+
+#### reply
+
+```typescript
+reply<WR extends boolean = false>(
+  body: ReplyInteractionBody,
+  withResponse?: WR
+): Promise<When<WR, WebhookMessage, undefined>>
+```
+
+Replies to the interaction.
+
+**Parameters:**
+- `body` - Reply data
+- `withResponse` - Whether to return the message object
+
+**Returns:** Promise resolving to message if `withResponse` is true
+
+**Example:**
+```typescript
+await interaction.reply({
+  type: InteractionResponseType.ChannelMessageWithSource,
+  data: {
+    content: 'Hello!'
+  }
+});
+```
+
+#### deferReply
+
+```typescript
+deferReply<WR extends boolean = false>(
+  flags?: MessageFlags,
+  withResponse?: WR
+): Promise<When<WR, WebhookMessage, undefined>>
+```
+
+Defers the interaction reply (shows "Bot is thinking...").
+
+**Parameters:**
+- `flags` - Message flags (e.g., ephemeral)
+- `withResponse` - Whether to return the message object
+
+**Example:**
+```typescript
+await interaction.deferReply(MessageFlags.Ephemeral);
+// Do some async work...
+await interaction.editResponse({ content: 'Done!' });
+```
+
+#### fetchGuild
+
+```typescript
+fetchGuild(mode?: 'rest' | 'flow'): Promise<Guild | undefined>
+fetchGuild(mode: 'cache'): Guild | undefined
+```
+
+Fetches the guild where the interaction was triggered.
+
+**Example:**
+```typescript
+const guild = await interaction.fetchGuild();
+if (guild) {
+  console.log(guild.name);
+}
+```
+
+### Type Guards
+
+```typescript
+interaction.isButton(): interaction is ButtonInteraction
+interaction.isChannelSelectMenu(): interaction is ChannelSelectMenuInteraction
+interaction.isRoleSelectMenu(): interaction is RoleSelectMenuInteraction
+interaction.isMentionableSelectMenu(): interaction is MentionableSelectMenuInteraction
+interaction.isUserSelectMenu(): interaction is UserSelectMenuInteraction
+interaction.isStringSelectMenu(): interaction is StringSelectMenuInteraction
+interaction.isChatInput(): interaction is ChatInputCommandInteraction
+interaction.isUser(): interaction is UserCommandInteraction
+interaction.isMessage(): interaction is MessageCommandInteraction
+interaction.isAutocomplete(): interaction is AutocompleteInteraction
+interaction.isModal(): interaction is ModalSubmitInteraction
+interaction.isEntryPoint(): interaction is EntryPointInteraction
+```
+
+## Interaction
+
+Extends `BaseInteraction` with response management methods.
+
+```typescript
+class Interaction extends BaseInteraction
+```
+
+### Methods
+
+#### write
+
+```typescript
+write<FR extends boolean = false>(
+  body: InteractionCreateBodyRequest,
+  withResponse?: FR
+): Promise<When<FR, WebhookMessage, void>>
+```
+
+Sends a response to the interaction.
+
+**Example:**
+```typescript
+await interaction.write({
+  content: 'Response!',
+  embeds: [{ title: 'Embed' }]
+});
+```
+
+#### modal
+
+```typescript
+modal(body: ModalCreateBodyRequest, options?: undefined): Promise<undefined>
+modal(body: ModalCreateBodyRequest, options: ModalCreateOptions): Promise<ModalSubmitInteraction | null>
+```
+
+Shows a modal to the user. Can optionally wait for submission.
+
+**Example:**
+```typescript
+// Show modal without waiting
+await interaction.modal({
+  title: 'Feedback Form',
+  custom_id: 'feedback',
+  components: [/* ... */]
+});
+
+// Show modal and wait for submission
+const modalSubmit = await interaction.modal(
+  { /* modal data */ },
+  { waitFor: 60000 } // Wait up to 60 seconds
+);
+
+if (modalSubmit) {
+  const feedback = modalSubmit.getInputValue('feedback_input', true);
+  console.log('User feedback:', feedback);
+}
+```
+
+#### editOrReply
+
+```typescript
+editOrReply<FR extends boolean = false>(
+  body: InteractionCreateBodyRequest,
+  fetchReply?: FR
+): Promise<When<FR, WebhookMessage, void>>
+```
+
+Edits the response if already replied, otherwise sends a new reply.
+
+**Example:**
+```typescript
+await interaction.editOrReply({
+  content: 'Updated or new message'
+});
+```
+
+#### editResponse
+
+```typescript
+editResponse(body: InteractionMessageUpdateBodyRequest): Promise<WebhookMessage>
+```
+
+Edits the original interaction response.
+
+**Example:**
+```typescript
+await interaction.deferReply();
+// Do work...
+await interaction.editResponse({
+  content: 'Work complete!'
+});
+```
+
+#### fetchResponse
+
+```typescript
+fetchResponse(): Promise<WebhookMessage>
+```
+
+Fetches the original interaction response.
+
+#### deleteResponse
+
+```typescript
+deleteResponse(): Promise<void>
+```
+
+Deletes the original interaction response.
+
+**Example:**
+```typescript
+await interaction.deleteResponse();
+```
+
+#### followup
+
+```typescript
+followup(body: MessageWebhookCreateBodyRequest): Promise<WebhookMessage>
+```
+
+Sends a followup message.
+
+**Example:**
+```typescript
+await interaction.reply(/* initial response */);
+await interaction.followup({
+  content: 'This is a followup message'
+});
+```
+
+## ChatInputCommandInteraction
+
+Represents a slash command interaction.
+
+```typescript
+class ChatInputCommandInteraction extends ApplicationCommandInteraction
+```
+
+**Type:** `InteractionType.ApplicationCommand`
+
+### Properties
+
+- `data: { id: string; name: string; type: ApplicationCommandType.ChatInput; ... }` - Command data
+
+**Example:**
+```typescript
+if (interaction.isChatInput()) {
+  console.log(`Command: ${interaction.data.name}`);
+  await interaction.write({ content: 'Command executed!' });
+}
+```
+
+## UserCommandInteraction
+
+Represents a user context menu command.
+
+```typescript
+class UserCommandInteraction extends ApplicationCommandInteraction
+```
+
+**Type:** `ApplicationCommandType.User`
+
+### Properties
+
+- `data: { id: string; name: string; type: ApplicationCommandType.User; targetId: string; ... }` - Command data
+
+**Example:**
+```typescript
+if (interaction.isUser()) {
+  const targetUser = interaction.data.resolved.users[interaction.data.targetId];
+  await interaction.write({ 
+    content: `User command on ${targetUser.username}` 
+  });
+}
+```
+
+## MessageCommandInteraction
+
+Represents a message context menu command.
+
+```typescript
+class MessageCommandInteraction extends ApplicationCommandInteraction
+```
+
+**Type:** `ApplicationCommandType.Message`
+
+### Properties
+
+- `data: { id: string; name: string; type: ApplicationCommandType.Message; targetId: string; ... }` - Command data
+
+**Example:**
+```typescript
+if (interaction.isMessage()) {
+  const targetMessage = interaction.data.resolved.messages[interaction.data.targetId];
+  await interaction.write({ 
+    content: `Message has ${targetMessage.content.length} characters` 
+  });
+}
+```
+
+## ComponentInteraction
+
+Base class for all component interactions.
+
+```typescript
+class ComponentInteraction extends Interaction
+```
+
+**Type:** `InteractionType.MessageComponent`
+
+### Properties
+
+- `data: { customId: string; componentType: ComponentType; ... }` - Component data
+- `message: Message` - Message containing the component
+- `customId: string` - The component's custom ID
+- `componentType: ComponentType` - Type of component
+
+### Methods
+
+#### update
+
+```typescript
+update(data: ComponentInteractionMessageUpdate): Promise<void>
+```
+
+Updates the message containing the component.
+
+**Example:**
+```typescript
+await interaction.update({
+  content: 'Button clicked!',
+  components: [] // Remove components
+});
+```
+
+#### deferUpdate
+
+```typescript
+deferUpdate(): Promise<void>
+```
+
+Defers the component update (acknowledges without changing the message).
+
+**Example:**
+```typescript
+await interaction.deferUpdate();
+// Do async work...
+await interaction.editResponse({ content: 'Done!' });
+```
+
+## ButtonInteraction
+
+Represents a button click interaction.
+
+```typescript
+class ButtonInteraction extends ComponentInteraction
+```
+
+**Component Type:** `ComponentType.Button`
+
+**Example:**
+```typescript
+if (interaction.isButton()) {
+  if (interaction.customId === 'confirm') {
+    await interaction.update({ 
+      content: 'Confirmed!',
+      components: []
+    });
+  }
+}
+```
+
+## SelectMenuInteraction
+
+Base class for select menu interactions.
+
+```typescript
+class SelectMenuInteraction extends ComponentInteraction
+```
+
+### Properties
+
+- `values: string[]` - Selected values
+
+## StringSelectMenuInteraction
+
+Represents a string select menu interaction.
+
+```typescript
+class StringSelectMenuInteraction extends SelectMenuInteraction
+```
+
+**Component Type:** `ComponentType.StringSelect`
+
+**Example:**
+```typescript
+if (interaction.isStringSelectMenu()) {
+  const selected = interaction.values[0];
+  await interaction.update({ 
+    content: `You selected: ${selected}` 
+  });
+}
+```
+
+## UserSelectMenuInteraction
+
+Represents a user select menu interaction.
+
+```typescript
+class UserSelectMenuInteraction extends SelectMenuInteraction
+```
+
+**Component Type:** `ComponentType.UserSelect`
+
+### Properties
+
+- `users: User[]` - Selected users
+- `members: InteractionGuildMember[]` - Selected members (if in guild)
+
+**Example:**
+```typescript
+if (interaction.isUserSelectMenu()) {
+  const userNames = interaction.users.map(u => u.username).join(', ');
+  await interaction.update({ 
+    content: `Selected users: ${userNames}` 
+  });
+}
+```
+
+## RoleSelectMenuInteraction
+
+Represents a role select menu interaction.
+
+```typescript
+class RoleSelectMenuInteraction extends SelectMenuInteraction
+```
+
+**Component Type:** `ComponentType.RoleSelect`
+
+### Properties
+
+- `roles: GuildRole[]` - Selected roles
+
+**Example:**
+```typescript
+if (interaction.isRoleSelectMenu()) {
+  const roleNames = interaction.roles.map(r => r.name).join(', ');
+  await interaction.update({ 
+    content: `Selected roles: ${roleNames}` 
+  });
+}
+```
+
+## ChannelSelectMenuInteraction
+
+Represents a channel select menu interaction.
+
+```typescript
+class ChannelSelectMenuInteraction extends SelectMenuInteraction
+```
+
+**Component Type:** `ComponentType.ChannelSelect`
+
+### Properties
+
+- `channels: AllChannels[]` - Selected channels
+
+**Example:**
+```typescript
+if (interaction.isChannelSelectMenu()) {
+  const channelMentions = interaction.channels.map(c => c.toString()).join(', ');
+  await interaction.update({ 
+    content: `Selected channels: ${channelMentions}` 
+  });
+}
+```
+
+## MentionableSelectMenuInteraction
+
+Represents a mentionable (users and roles) select menu interaction.
+
+```typescript
+class MentionableSelectMenuInteraction extends SelectMenuInteraction
+```
+
+**Component Type:** `ComponentType.MentionableSelect`
+
+### Properties
+
+- `roles: GuildRole[]` - Selected roles
+- `members: InteractionGuildMember[]` - Selected members
+- `users: User[]` - Selected users
+
+**Example:**
+```typescript
+if (interaction.isMentionableSelectMenu()) {
+  const mentions = [
+    ...interaction.roles.map(r => r.name),
+    ...interaction.users.map(u => u.username)
+  ].join(', ');
+  
+  await interaction.update({ 
+    content: `Selected: ${mentions}` 
+  });
+}
+```
+
+## ModalSubmitInteraction
+
+Represents a modal submission.
+
+```typescript
+class ModalSubmitInteraction extends BaseInteraction
+```
+
+**Type:** `InteractionType.ModalSubmit`
+
+### Properties
+
+- `data: { customId: string; components: ModalComponent[]; ... }` - Modal data
+- `customId: string` - Modal's custom ID
+- `components: ModalComponent[]` - Submitted components
+
+### Methods
+
+#### getInputValue
+
+```typescript
+getInputValue(customId: string, required: true): string | string[]
+getInputValue(customId: string, required?: false): string | string[] | undefined
+```
+
+Gets the value from a text input.
+
+**Example:**
+```typescript
+const feedback = modalSubmit.getInputValue('feedback', true);
+await modalSubmit.write({ 
+  content: `Thanks for your feedback: ${feedback}` 
+});
+```
+
+#### getChannels
+
+```typescript
+getChannels(customId: string, required: true): AllChannels[]
+getChannels(customId: string, required?: false): AllChannels[] | void
+```
+
+Gets selected channels from a channel select.
+
+#### getRoles
+
+```typescript
+getRoles(customId: string, required: true): GuildRole[]
+getRoles(customId: string, required?: false): GuildRole[] | void
+```
+
+Gets selected roles from a role select.
+
+#### getUsers
+
+```typescript
+getUsers(customId: string, required: true): User[]
+getUsers(customId: string, required?: false): User[] | void
+```
+
+Gets selected users from a user select.
+
+#### getMentionables
+
+```typescript
+getMentionables(customId: string, required: true): (User | GuildRole | InteractionGuildMember)[]
+getMentionables(customId: string, required?: false): (User | GuildRole | InteractionGuildMember)[] | void
+```
+
+Gets selected mentionables from a mentionable select.
+
+#### getCheckbox
+
+```typescript
+getCheckbox(customId: string, required: true): boolean
+getCheckbox(customId: string, required?: false): boolean | void
+```
+
+Gets the value of a checkbox.
+
+#### getCheckboxValues
+
+```typescript
+getCheckboxValues(customId: string, required: true): string[]
+getCheckboxValues(customId: string, required?: false): string[] | void
+```
+
+Gets selected values from a checkbox group.
+
+#### getRadioValues
+
+```typescript
+getRadioValues(customId: string, required: true): string
+getRadioValues(customId: string, required?: false): string | void
+```
+
+Gets the selected value from a radio group.
+
+#### getFiles
+
+```typescript
+getFiles(customId: string, required: true): Attachment[]
+getFiles(customId: string, required?: false): Attachment[] | undefined
+```
+
+Gets uploaded files from a file upload component.
+
+#### update
+
+```typescript
+update<WR extends boolean = false>(
+  data: ComponentInteractionMessageUpdate,
+  withResponse?: WR
+): Promise<When<WR, WebhookMessage, undefined>>
+```
+
+Updates the message (for modals shown from components).
+
+#### deferUpdate
+
+```typescript
+deferUpdate<WR extends boolean = false>(
+  withResponse?: WR
+): Promise<When<WR, WebhookMessage, undefined>>
+```
+
+Defers the update.
+
+**Example:**
+```typescript
+if (interaction.isModal()) {
+  const name = modalSubmit.getInputValue('name', true);
+  const email = modalSubmit.getInputValue('email', true);
+  
+  await modalSubmit.write({
+    content: `Form submitted!\nName: ${name}\nEmail: ${email}`,
+    flags: MessageFlags.Ephemeral
+  });
+}
+```
+
+## AutocompleteInteraction
+
+Represents an autocomplete interaction.
+
+```typescript
+class AutocompleteInteraction extends BaseInteraction
+```
+
+**Type:** `InteractionType.ApplicationCommandAutocomplete`
+
+### Properties
+
+- `data: { id: string; name: string; options: CommandOption[]; ... }` - Command data
+- `options: OptionResolver` - Option resolver for accessing option values
+
+### Methods
+
+#### getInput
+
+```typescript
+getInput(): string
+```
+
+Gets the current autocomplete input value.
+
+**Returns:** The focused option's current value
+
+#### respond
+
+```typescript
+respond(choices: { name: string; value: string | number }[]): Promise<void>
+```
+
+Responds with autocomplete choices.
+
+**Example:**
+```typescript
+if (interaction.isAutocomplete()) {
+  const input = interaction.getInput();
+  
+  const choices = [
+    { name: 'Apple', value: 'apple' },
+    { name: 'Banana', value: 'banana' },
+    { name: 'Cherry', value: 'cherry' }
+  ].filter(c => c.name.toLowerCase().includes(input.toLowerCase()));
+  
+  await interaction.respond(choices.slice(0, 25)); // Max 25 choices
+}
+```
+
+## Related Types
+
+```typescript
+type AllInteractions =
+  | AutocompleteInteraction
+  | ChatInputCommandInteraction
+  | UserCommandInteraction
+  | MessageCommandInteraction
+  | ComponentInteraction
+  | SelectMenuInteraction
+  | ModalSubmitInteraction
+  | EntryPointInteraction
+  | BaseInteraction;
+
+interface InteractionCreateBodyRequest {
+  content?: string;
+  tts?: boolean;
+  embeds?: APIEmbed[];
+  allowed_mentions?: AllowedMentions;
+  components?: TopLevelComponents[];
+  attachments?: Attachment[];
+  flags?: MessageFlags;
+}
+
+interface ModalCreateBodyRequest {
+  title: string;
+  custom_id: string;
+  components: Label[];
+}
+```

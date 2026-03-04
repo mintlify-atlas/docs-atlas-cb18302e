@@ -1,0 +1,343 @@
+---
+title: 'Buttons'
+description: 'Create interactive button components for your Discord bot'
+icon: 'button'
+---
+
+Buttons are interactive components that users can click to trigger actions in your Discord bot. Seyfert provides a powerful and type-safe API for creating and handling button interactions.
+
+## Creating Buttons
+
+Use the `Button` builder class to create button components:
+
+```typescript
+import { Button, ActionRow, ButtonStyle } from 'seyfert';
+
+const button = new Button()
+  .setCustomId('my-button')
+  .setLabel('Click Me')
+  .setStyle(ButtonStyle.Primary);
+
+const row = new ActionRow<Button>().addComponents(button);
+```
+
+## Button Styles
+
+Seyfert supports all Discord button styles:
+
+```typescript
+import { ButtonStyle } from 'seyfert';
+
+// Primary (Blurple)
+const primaryButton = new Button()
+  .setCustomId('primary')
+  .setLabel('Primary')
+  .setStyle(ButtonStyle.Primary);
+
+// Secondary (Gray)
+const secondaryButton = new Button()
+  .setCustomId('secondary')
+  .setLabel('Secondary')
+  .setStyle(ButtonStyle.Secondary);
+
+// Success (Green)
+const successButton = new Button()
+  .setCustomId('success')
+  .setLabel('Success')
+  .setStyle(ButtonStyle.Success);
+
+// Danger (Red)
+const dangerButton = new Button()
+  .setCustomId('danger')
+  .setLabel('Danger')
+  .setStyle(ButtonStyle.Danger);
+```
+
+## Link Buttons
+
+Create buttons that open external URLs:
+
+```typescript
+const linkButton = new Button()
+  .setURL('https://discord.com')
+  .setLabel('Visit Discord')
+  .setStyle(ButtonStyle.Link);
+```
+
+<Note>
+  Link buttons don't require a custom ID and don't trigger interactions. They simply open URLs.
+</Note>
+
+## Premium Buttons
+
+Create buttons for premium (SKU) purchases:
+
+```typescript
+const premiumButton = new Button()
+  .setSKUId('your-sku-id')
+  .setStyle(ButtonStyle.Premium);
+```
+
+## Button Properties
+
+### Custom ID
+
+Set a unique identifier for your button (max 100 characters):
+
+```typescript
+button.setCustomId('confirm-action');
+```
+
+### Label
+
+Set the text displayed on the button:
+
+```typescript
+button.setLabel('Click Here');
+```
+
+### Emoji
+
+Add an emoji to your button:
+
+```typescript
+// Unicode emoji
+button.setEmoji('✅');
+
+// Custom emoji by ID
+button.setEmoji('123456789');
+
+// Custom emoji object
+button.setEmoji({
+  id: '123456789',
+  name: 'custom_emoji',
+  animated: false
+});
+```
+
+### Disabled State
+
+Disable a button to prevent interactions:
+
+```typescript
+button.setDisabled(true);
+
+// Re-enable
+button.setDisabled(false);
+```
+
+## Sending Buttons
+
+Attach buttons to messages using action rows:
+
+```typescript
+import { ActionRow, Button, ButtonStyle } from 'seyfert';
+
+const confirmButton = new Button()
+  .setCustomId('confirm')
+  .setLabel('Confirm')
+  .setStyle(ButtonStyle.Success);
+
+const cancelButton = new Button()
+  .setCustomId('cancel')
+  .setLabel('Cancel')
+  .setStyle(ButtonStyle.Danger);
+
+const row = new ActionRow<Button>()
+  .addComponents(confirmButton, cancelButton);
+
+await interaction.write({
+  content: 'Are you sure?',
+  components: [row]
+});
+```
+
+<Warning>
+  Each message can have up to 5 action rows, and each action row can contain up to 5 buttons.
+</Warning>
+
+## Handling Button Clicks
+
+Create a component command to handle button interactions:
+
+```typescript
+import { ComponentCommand, ComponentType } from 'seyfert';
+import type { ComponentContext } from 'seyfert';
+
+export default class ConfirmButton extends ComponentCommand {
+  componentType = ComponentType.Button as const;
+  
+  // Match specific button by custom ID
+  customId = 'confirm';
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    await ctx.write({
+      content: 'Action confirmed!',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+### Pattern Matching
+
+Use regular expressions to match multiple buttons:
+
+```typescript
+export default class ActionButtons extends ComponentCommand {
+  componentType = ComponentType.Button as const;
+  
+  // Match buttons like: action-confirm, action-cancel, action-retry
+  customId = /^action-(.+)$/;
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const action = ctx.customId.match(/^action-(.+)$/)?.[1];
+    
+    await ctx.write({
+      content: `You clicked: ${action}`
+    });
+  }
+}
+```
+
+### Custom Filter
+
+Add custom logic to filter button interactions:
+
+```typescript
+export default class AdminButton extends ComponentCommand {
+  componentType = ComponentType.Button as const;
+  customId = 'admin-action';
+  
+  // Only allow admins to use this button
+  async filter(ctx: ComponentContext<typeof this.componentType>) {
+    const member = ctx.member;
+    return member?.permissions.has('Administrator') ?? false;
+  }
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    await ctx.write({
+      content: 'Admin action executed!'
+    });
+  }
+}
+```
+
+## Accessing Button Data
+
+Retrieve button information from the context:
+
+```typescript
+import { ButtonComponent } from 'seyfert';
+
+async run(ctx: ComponentContext<typeof this.componentType>) {
+  const button = ctx.component as ButtonComponent;
+  
+  console.log(button.customId);  // The button's custom ID
+  console.log(button.label);     // The button's label
+  console.log(button.style);     // The button style (1-5)
+  console.log(button.disabled);  // Whether the button is disabled
+  console.log(button.emoji);     // The button's emoji, if any
+}
+```
+
+## Updating Buttons
+
+Modify button states after interaction:
+
+```typescript
+import { Button } from 'seyfert';
+
+async run(ctx: ComponentContext<typeof this.componentType>) {
+  // Convert component to builder
+  const currentButton = (ctx.component as ButtonComponent).toBuilder();
+  
+  // Disable the button after click
+  const updatedButton = new Button(currentButton.data)
+    .setDisabled(true)
+    .setLabel('Clicked!');
+  
+  const row = new ActionRow<Button>().addComponents(updatedButton);
+  
+  await ctx.update({
+    components: [row]
+  });
+}
+```
+
+## Complete Example
+
+Here's a full example with a multi-step interaction:
+
+```typescript
+// Command to send buttons
+import { Command, Options, createStringOption } from 'seyfert';
+import { ActionRow, Button, ButtonStyle } from 'seyfert';
+
+export default class PollCommand extends Command {
+  @Options({
+    question: createStringOption({
+      description: 'The poll question',
+      required: true
+    })
+  })
+  async run(ctx: CommandContext, options: { question: string }) {
+    const yesButton = new Button()
+      .setCustomId('poll-yes')
+      .setLabel('Yes')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('✅');
+    
+    const noButton = new Button()
+      .setCustomId('poll-no')
+      .setLabel('No')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('❌');
+    
+    const row = new ActionRow<Button>()
+      .addComponents(yesButton, noButton);
+    
+    await ctx.write({
+      content: `**Poll:** ${options.question}`,
+      components: [row]
+    });
+  }
+}
+
+// Component handler
+import { ComponentCommand, ComponentType } from 'seyfert';
+
+export default class PollButton extends ComponentCommand {
+  componentType = ComponentType.Button as const;
+  customId = /^poll-(yes|no)$/;
+  
+  async run(ctx: ComponentContext<typeof this.componentType>) {
+    const vote = ctx.customId.includes('yes') ? 'Yes' : 'No';
+    
+    await ctx.write({
+      content: `You voted: **${vote}**`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Descriptive IDs" icon="tag">
+    Use clear, descriptive custom IDs that indicate the button's purpose: `confirm-delete`, `page-next`, `role-apply`.
+  </Card>
+  
+  <Card title="Disable After Use" icon="ban">
+    Disable buttons after they're clicked if they should only be used once to prevent duplicate actions.
+  </Card>
+  
+  <Card title="Provide Feedback" icon="comments">
+    Always respond to button interactions with either `write()` or `update()` to acknowledge the user's action.
+  </Card>
+  
+  <Card title="Handle Expiration" icon="clock">
+    Button interactions expire after 15 minutes. Consider disabling buttons in old messages.
+  </Card>
+</CardGroup>

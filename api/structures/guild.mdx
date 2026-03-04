@@ -1,0 +1,346 @@
+---
+title: Guild
+description: API reference for the Guild class in Seyfert
+---
+
+The `Guild` class represents a Discord guild (server) with all its properties and methods for managing guild resources.
+
+## Constructor
+
+```typescript
+new Guild(client: UsingClient, data: APIGuild | GatewayGuildCreateDispatchData)
+```
+
+## Properties
+
+### Core Properties
+
+Inherits all properties from `APIGuild` in camelCase format, including:
+
+- `id: string` - The guild's unique identifier
+- `name: string` - The guild's name
+- `icon: string | null` - The guild's icon hash
+- `ownerId: string` - The user ID of the guild owner
+- `permissions?: string` - Total permissions for the user in the guild
+- `region?: string` - Voice region
+- `afkChannelId: string | null` - AFK channel ID
+- `afkTimeout: number` - AFK timeout in seconds
+- `verificationLevel: number` - Verification level required
+- `defaultMessageNotifications: number` - Default message notification level
+- `explicitContentFilter: number` - Explicit content filter level
+- `features: string[]` - Enabled guild features
+- `mfaLevel: number` - Required MFA level
+- `applicationId: string | null` - Application ID if bot-created
+- `systemChannelId: string | null` - System messages channel ID
+- `systemChannelFlags: number` - System channel flags
+- `rulesChannelId: string | null` - Rules channel ID
+- `maxPresences?: number | null` - Maximum presences
+- `maxMembers?: number` - Maximum members
+- `vanityUrlCode: string | null` - Vanity URL code
+- `description: string | null` - Guild description
+- `banner: string | null` - Banner hash
+- `premiumTier: number` - Premium tier (boost level)
+- `premiumSubscriptionCount?: number` - Number of boosts
+- `preferredLocale: string` - Preferred locale
+- `publicUpdatesChannelId: string | null` - Public updates channel ID
+- `maxVideoChannelUsers?: number` - Max video channel users
+- `welcomeScreen?: WelcomeScreen` - Welcome screen configuration
+- `nsfwLevel: number` - NSFW level
+- `premiumProgressBarEnabled: boolean` - Whether premium progress bar is enabled
+
+### Gateway-specific Properties
+
+These properties are only available when the guild is received through gateway events:
+
+- `joinedAt: number` - Timestamp when bot joined the guild
+- `memberCount: number` - Total member count
+- `large: boolean` - Whether the guild is considered large
+- `unavailable?: boolean` - Whether the guild is unavailable
+
+### Computed Properties
+
+#### maxStickers
+
+```typescript
+get maxStickers(): MaxStickers
+```
+
+Returns the maximum number of custom stickers allowed based on premium tier:
+- Tier 0: 5 stickers
+- Tier 1: 15 stickers
+- Tier 2: 30 stickers
+- Tier 3: 60 stickers
+
+**Returns:** `5 | 15 | 30 | 60`
+
+#### maxEmojis
+
+```typescript
+get maxEmojis(): MaxEmojis
+```
+
+Returns the maximum number of custom emojis allowed based on premium tier:
+- Tier 0: 50 emojis
+- Tier 1: 100 emojis
+- Tier 2: 150 emojis
+- Tier 3: 250 emojis
+
+**Returns:** `50 | 100 | 150 | 250`
+
+## Methods
+
+### fetchOwner
+
+```typescript
+fetchOwner(force?: boolean): Promise<GuildMember | null>
+```
+
+Fetches the guild owner as a guild member.
+
+**Parameters:**
+- `force` - Whether to skip cache and fetch from API
+
+**Returns:** Promise resolving to the guild owner member, or null if no owner exists
+
+**Example:**
+```typescript
+const owner = await guild.fetchOwner();
+if (owner) {
+  console.log(`Guild owner: ${owner.user.username}`);
+}
+```
+
+### listActiveThreads
+
+```typescript
+listActiveThreads(force?: boolean): Promise<ThreadChannel[]>
+```
+
+Lists all active threads in the guild.
+
+**Parameters:**
+- `force` - Whether to skip cache and fetch from API
+
+**Returns:** Promise resolving to array of active thread channels
+
+**Example:**
+```typescript
+const threads = await guild.listActiveThreads();
+console.log(`Active threads: ${threads.length}`);
+```
+
+### edit
+
+```typescript
+edit(body: RESTPatchAPIGuildJSONBody, reason?: string): Promise<Guild>
+```
+
+Edits the guild's settings.
+
+**Parameters:**
+- `body` - Guild update data
+- `reason` - Audit log reason
+
+**Returns:** Promise resolving to the updated guild
+
+**Example:**
+```typescript
+await guild.edit({
+  name: 'New Guild Name',
+  description: 'A cool community server'
+}, 'Rebranding');
+```
+
+## Resource Methods
+
+The Guild class provides access to various guild resources through method objects:
+
+### webhooks
+
+```typescript
+webhooks.list(): Promise<Webhook[]>
+```
+
+Manage guild webhooks.
+
+**Example:**
+```typescript
+const webhooks = await guild.webhooks.list();
+```
+
+### templates
+
+```typescript
+templates.list(): Promise<GuildTemplate[]>
+templates.fetch(code: string): Promise<GuildTemplate>
+templates.create(body: RESTPostAPIGuildTemplatesJSONBody): Promise<GuildTemplate>
+// ... and more
+```
+
+Manage guild templates.
+
+**Example:**
+```typescript
+const templates = await guild.templates.list();
+```
+
+### stickers
+
+```typescript
+stickers.list(force?: boolean): Promise<Sticker[]>
+stickers.fetch(id: string, force?: boolean): Promise<Sticker>
+stickers.create(body: FormData): Promise<Sticker>
+stickers.edit(id: string, body: RESTPatchAPIStickerJSONBody): Promise<Sticker>
+stickers.delete(id: string, reason?: string): Promise<void>
+```
+
+Manage guild stickers.
+
+**Example:**
+```typescript
+const stickers = await guild.stickers.list();
+for (const sticker of stickers) {
+  console.log(sticker.name);
+}
+```
+
+### members
+
+```typescript
+members.list(query?: RESTGetAPIGuildMembersQuery): Promise<GuildMember[]>
+members.fetch(id: string, force?: boolean): Promise<GuildMember>
+members.search(query: RESTGetAPIGuildMembersSearchQuery): Promise<GuildMember[]>
+members.edit(id: string, body: RESTPatchAPIGuildMemberJSONBody): Promise<GuildMember>
+members.kick(id: string, reason?: string): Promise<void>
+// ... and more
+```
+
+Manage guild members.
+
+**Example:**
+```typescript
+const member = await guild.members.fetch('123456789');
+await guild.members.edit(member.id, {
+  nick: 'New Nickname'
+});
+```
+
+### moderationRules
+
+```typescript
+moderationRules.list(force?: boolean): Promise<AutoModerationRule[]>
+moderationRules.fetch(id: string, force?: boolean): Promise<AutoModerationRule>
+moderationRules.create(body: RESTPostAPIAutoModerationRuleJSONBody): Promise<AutoModerationRule>
+moderationRules.edit(id: string, body: RESTPatchAPIAutoModerationRuleJSONBody): Promise<AutoModerationRule>
+moderationRules.delete(id: string, reason?: string): Promise<void>
+```
+
+Manage auto-moderation rules.
+
+**Example:**
+```typescript
+const rules = await guild.moderationRules.list();
+```
+
+### roles
+
+```typescript
+roles.list(force?: boolean): Promise<GuildRole[]>
+roles.fetch(id: string, force?: boolean): Promise<GuildRole>
+roles.create(body: RESTPostAPIGuildRoleJSONBody): Promise<GuildRole>
+roles.edit(id: string, body: RESTPatchAPIGuildRoleJSONBody): Promise<GuildRole>
+roles.delete(id: string, reason?: string): Promise<void>
+// ... and more
+```
+
+Manage guild roles.
+
+**Example:**
+```typescript
+const newRole = await guild.roles.create({
+  name: 'Moderator',
+  color: 0x3498db,
+  permissions: '8'
+});
+```
+
+### channels
+
+```typescript
+channels.list(force?: boolean): Promise<AllChannels[]>
+channels.fetch(id: string, force?: boolean): Promise<AllChannels>
+channels.create(body: RESTPostAPIGuildChannelJSONBody): Promise<Channel>
+channels.edit(id: string, body: RESTPatchAPIChannelJSONBody): Promise<Channel>
+channels.delete(id: string, reason?: string): Promise<void>
+channels.editPositions(body: RESTPatchAPIGuildChannelPositionsJSONBody): Promise<void>
+```
+
+Manage guild channels.
+
+**Example:**
+```typescript
+const newChannel = await guild.channels.create({
+  name: 'general',
+  type: ChannelType.GuildText
+});
+```
+
+### emojis
+
+```typescript
+emojis.list(force?: boolean): Promise<GuildEmoji[]>
+emojis.fetch(id: string, force?: boolean): Promise<GuildEmoji>
+emojis.create(body: RESTPostAPIGuildEmojiJSONBody): Promise<GuildEmoji>
+emojis.edit(id: string, body: RESTPatchAPIGuildEmojiJSONBody): Promise<GuildEmoji>
+emojis.delete(id: string, reason?: string): Promise<void>
+```
+
+Manage guild emojis.
+
+**Example:**
+```typescript
+const emojis = await guild.emojis.list();
+```
+
+### bans
+
+```typescript
+bans.list(query?: RESTGetAPIGuildBansQuery): Promise<GuildBan[]>
+bans.fetch(userId: string): Promise<GuildBan>
+bans.create(userId: string, body?: RESTPutAPIGuildBanJSONBody): Promise<void>
+bans.remove(userId: string, reason?: string): Promise<void>
+```
+
+Manage guild bans.
+
+**Example:**
+```typescript
+await guild.bans.create('123456789', {
+  delete_message_seconds: 604800 // 7 days
+});
+```
+
+### invites
+
+```typescript
+invites.list(): Promise<Invite[]>
+invites.create(data: CreateInviteFromChannel): Promise<Invite>
+invites.delete(code: string, reason?: string): Promise<Invite>
+```
+
+Manage guild invites.
+
+**Example:**
+```typescript
+const invites = await guild.invites.list();
+for (const invite of invites) {
+  console.log(`${invite.code}: ${invite.uses} uses`);
+}
+```
+
+## Related Types
+
+```typescript
+type MaxEmojis = 50 | 100 | 150 | 250;
+type MaxStickers = 5 | 15 | 30 | 60;
+```

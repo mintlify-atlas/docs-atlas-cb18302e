@@ -1,0 +1,422 @@
+---
+title: WorkerClient
+description: Client for running Discord bots in worker processes with IPC support
+---
+
+## WorkerClient
+
+The `WorkerClient` class extends `BaseClient` and is designed to run in worker threads or child processes. It enables horizontal scaling by distributing shards across multiple workers with inter-process communication (IPC).
+
+### Constructor
+
+```typescript
+new WorkerClient<Ready extends boolean = boolean>(options?: WorkerClientOptions)
+```
+
+<ParamField path="options" type="WorkerClientOptions">
+  Optional configuration for the worker client
+</ParamField>
+
+### Properties
+
+Inherits all properties from `BaseClient`, plus:
+
+<ParamField path="me" type="When<Ready, ClientUserStructure>">
+  The bot's user information (available when ready)
+</ParamField>
+
+<ParamField path="events" type="EventHandler">
+  Event handler for managing Discord gateway events
+</ParamField>
+
+<ParamField path="collectors" type="Collectors">
+  Collectors for awaiting specific events or interactions
+</ParamField>
+
+<ParamField path="memberUpdateHandler" type="MemberUpdateHandler">
+  Handler for member update events
+</ParamField>
+
+<ParamField path="presenceUpdateHandler" type="PresenceUpdateHandler">
+  Handler for presence update events
+</ParamField>
+
+<ParamField path="shards" type="Map<number, Shard>">
+  Map of active shards managed by this worker
+</ParamField>
+
+<ParamField path="resharding" type="Map<number, Shard>">
+  Map of shards being prepared for resharding
+</ParamField>
+
+<ParamField path="promises" type="Map<string, Promise>">
+  Map of pending IPC promises
+</ParamField>
+
+<ParamField path="workerId" type="number">
+  Unique identifier for this worker
+</ParamField>
+
+<ParamField path="workerData" type="WorkerData">
+  Worker configuration data
+</ParamField>
+
+<ParamField path="latency" type="number">
+  Average latency across all shards in this worker
+</ParamField>
+
+### Methods
+
+#### start()
+
+Starts the worker client and initializes IPC communication.
+
+```typescript
+await workerClient.start(options?: {
+  eventsDir?: string;
+  langsDir?: string;
+  commandsDir?: string;
+  componentsDir?: string;
+}): Promise<void>
+```
+
+<ParamField path="options.eventsDir" type="string">
+  Directory containing event handler files
+</ParamField>
+
+<ParamField path="options.langsDir" type="string">
+  Directory containing language files
+</ParamField>
+
+<ParamField path="options.commandsDir" type="string">
+  Directory containing command files
+</ParamField>
+
+<ParamField path="options.componentsDir" type="string">
+  Directory containing component files
+</ParamField>
+
+#### loadEvents()
+
+Loads event handlers from a directory.
+
+```typescript
+await workerClient.loadEvents(dir?: string): Promise<void>
+```
+
+<ParamField path="dir" type="string">
+  Directory containing event files (defaults to config)
+</ParamField>
+
+#### postMessage()
+
+Sends a message to the parent process or manager.
+
+```typescript
+workerClient.postMessage(body: WorkerMessages | ClientHeartbeaterMessages): unknown
+```
+
+<ParamField path="body" type="WorkerMessages | ClientHeartbeaterMessages">
+  Message payload to send to the parent
+</ParamField>
+
+#### handleManagerMessages()
+
+Handles incoming messages from the worker manager.
+
+```typescript
+await workerClient.handleManagerMessages(data: ManagerMessages | WorkerHeartbeaterMessages): Promise<void>
+```
+
+<ParamField path="data" type="ManagerMessages | WorkerHeartbeaterMessages">
+  Message received from the manager
+</ParamField>
+
+#### tellWorker()
+
+Executes a function on a specific worker and returns the result.
+
+```typescript
+await workerClient.tellWorker<R, V extends Record<string, unknown>>(
+  workerId: number,
+  func: (client: WorkerClient, vars: V) => R,
+  vars: V
+): Promise<R>
+```
+
+<ParamField path="workerId" type="number">
+  ID of the target worker
+</ParamField>
+
+<ParamField path="func" type="function">
+  Function to execute on the target worker
+</ParamField>
+
+<ParamField path="vars" type="Record<string, unknown>">
+  Variables to pass to the function
+</ParamField>
+
+#### tellWorkers()
+
+Executes a function on all workers and returns all results.
+
+```typescript
+await workerClient.tellWorkers<R, V extends Record<string, unknown>>(
+  func: (client: WorkerClient, vars: V) => R,
+  vars: V
+): Promise<R[]>
+```
+
+<ParamField path="func" type="function">
+  Function to execute on all workers
+</ParamField>
+
+<ParamField path="vars" type="Record<string, unknown>">
+  Variables to pass to the function
+</ParamField>
+
+#### createShard()
+
+Creates a new shard instance for this worker.
+
+```typescript
+workerClient.createShard(id: number, data: {
+  info: GatewayBotInfo;
+  compress?: boolean;
+  properties?: ShardProperties;
+}): Shard
+```
+
+<ParamField path="id" type="number">
+  Shard ID
+</ParamField>
+
+<ParamField path="data" type="object">
+  Shard configuration
+</ParamField>
+
+#### resumeShard()
+
+Resumes a disconnected shard with existing session data.
+
+```typescript
+await workerClient.resumeShard(shardId: number, shardData: ShardData): Promise<void>
+```
+
+<ParamField path="shardId" type="number">
+  ID of the shard to resume
+</ParamField>
+
+<ParamField path="shardData" type="ShardData">
+  Session data for resuming the shard
+</ParamField>
+
+#### calculateShardId()
+
+Calculates which shard ID a guild belongs to.
+
+```typescript
+workerClient.calculateShardId(guildId: string): number
+```
+
+<ParamField path="guildId" type="string">
+  Guild ID to calculate shard for
+</ParamField>
+
+#### setWorkerData()
+
+Sets the worker data configuration.
+
+```typescript
+workerClient.setWorkerData(data: WorkerData): void
+```
+
+<ParamField path="data" type="WorkerData">
+  Worker configuration data
+</ParamField>
+
+#### setServices()
+
+Configures services for the worker client.
+
+```typescript
+workerClient.setServices(options: ServicesOptions): void
+```
+
+<ParamField path="options" type="ServicesOptions">
+  Service configuration options
+</ParamField>
+
+## WorkerClientOptions
+
+Configuration options for WorkerClient, extending BaseClientOptions.
+
+```typescript
+interface WorkerClientOptions extends BaseClientOptions {
+  commands?: NonNullable<Client['options']>['commands'];
+  handlePayload?: (shardId: number, packet: GatewayDispatchPayload) => Awaitable<any>;
+  gateway?: {
+    properties?: Partial<ShardProperties>;
+    compress?: boolean;
+  };
+  postMessage?: (body: unknown) => Awaitable<unknown>;
+  sendPayloadToParent?: boolean;
+  handleManagerMessages?(
+    message: ManagerMessages | WorkerHeartbeaterMessages
+  ): Awaitable<unknown>;
+}
+```
+
+<ParamField path="commands" type="object">
+  Command configuration including prefix and reply options
+</ParamField>
+
+<ParamField path="handlePayload" type="function">
+  Custom handler for gateway payloads
+</ParamField>
+
+<ParamField path="gateway" type="object">
+  Gateway connection configuration
+  - `properties`: Gateway identify properties
+  - `compress`: Enable payload compression
+</ParamField>
+
+<ParamField path="postMessage" type="function">
+  Custom function for sending IPC messages
+</ParamField>
+
+<ParamField path="sendPayloadToParent" type="boolean" default="false">
+  Whether to send every gateway payload to the parent process (can impact performance)
+</ParamField>
+
+<ParamField path="handleManagerMessages" type="function">
+  Custom handler for manager messages
+</ParamField>
+
+## Examples
+
+### Basic Worker Client
+
+```typescript
+import { WorkerClient } from 'seyfert';
+
+const client = new WorkerClient();
+
+await client.start({
+  eventsDir: './src/events',
+  commandsDir: './src/commands',
+});
+```
+
+### Worker Manager Setup
+
+```typescript
+// manager.ts
+import { WorkerManager } from 'seyfert';
+
+const manager = new WorkerManager({
+  token: process.env.BOT_TOKEN,
+  intents: ['Guilds', 'GuildMessages'],
+  workersPath: './dist/worker.js',
+  totalShards: 10,
+  totalWorkers: 5,
+});
+
+await manager.spawnWorkers();
+```
+
+```typescript
+// worker.ts
+import { WorkerClient } from 'seyfert';
+
+const client = new WorkerClient();
+
+await client.start();
+```
+
+### Communication Between Workers
+
+```typescript
+import { WorkerClient } from 'seyfert';
+
+const client = new WorkerClient();
+
+await client.start();
+
+// Get guild count from a specific worker
+const guildCount = await client.tellWorker(
+  2,
+  (client, vars) => client.cache.guilds?.count() ?? 0,
+  {}
+);
+
+// Get total guild count from all workers
+const allGuildCounts = await client.tellWorkers(
+  (client, vars) => client.cache.guilds?.count() ?? 0,
+  {}
+);
+
+const totalGuilds = allGuildCounts.reduce((a, b) => a + b, 0);
+console.log(`Total guilds: ${totalGuilds}`);
+```
+
+### Custom IPC Messages
+
+```typescript
+import { WorkerClient } from 'seyfert';
+
+const client = new WorkerClient({
+  handleManagerMessages: async (message) => {
+    if (message.type === 'CUSTOM_MESSAGE') {
+      console.log('Received custom message:', message.data);
+    }
+  },
+});
+
+await client.start();
+```
+
+### Shard Management
+
+```typescript
+import { WorkerClient } from 'seyfert';
+
+const client = new WorkerClient();
+
+await client.start();
+
+// Get shard information
+for (const [id, shard] of client.shards) {
+  console.log(`Shard ${id}: ${shard.latency}ms`);
+}
+
+// Calculate which shard a guild belongs to
+const shardId = client.calculateShardId('1234567890');
+console.log(`Guild belongs to shard ${shardId}`);
+```
+
+### Worker-Specific Events
+
+```typescript
+// src/events/workerReady.ts
+import { createEvent } from 'seyfert';
+
+export default createEvent({
+  data: { name: 'WORKER_READY' },
+  run: (user, client, shardId) => {
+    console.log(`Worker ${client.workerId} is ready with ${client.shards.size} shards`);
+  },
+});
+```
+
+```typescript
+// src/events/workerShardsConnected.ts
+import { createEvent } from 'seyfert';
+
+export default createEvent({
+  data: { name: 'WORKER_SHARDS_CONNECTED' },
+  run: (user, client, shardId) => {
+    console.log(`All shards connected in worker ${client.workerId}`);
+  },
+});
+```

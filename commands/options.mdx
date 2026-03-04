@@ -1,0 +1,555 @@
+---
+title: "Command Options"
+description: "Add parameters and arguments to your slash commands"
+---
+
+## Overview
+
+Command options allow users to provide input to your slash commands. Seyfert provides a type-safe system for defining, validating, and accessing command options.
+
+## Basic Option Types
+
+Seyfert supports all Discord option types:
+
+- **String**: Text input
+- **Integer**: Whole numbers
+- **Number**: Decimal numbers
+- **Boolean**: True/false values
+- **User**: Select a user
+- **Channel**: Select a channel
+- **Role**: Select a role
+- **Mentionable**: Select a user or role
+- **Attachment**: Upload a file
+
+## Defining Options
+
+Use the `@Options` decorator with option creation functions:
+
+```typescript
+import { Command, Declare, Options, createStringOption, createUserOption } from 'seyfert';
+import type { CommandContext } from 'seyfert';
+
+@Declare({
+  name: 'greet',
+  description: 'Greet a user'
+})
+@Options({
+  user: createUserOption({
+    description: 'The user to greet',
+    required: true
+  }),
+  message: createStringOption({
+    description: 'Custom greeting message',
+    required: false
+  })
+})
+export default class GreetCommand extends Command {
+  async run(ctx: CommandContext<typeof GreetCommand.options>) {
+    const user = ctx.options.user;
+    const message = ctx.options.message ?? 'Hello';
+    
+    await ctx.write({
+      content: `${message}, ${user.username}!`
+    });
+  }
+}
+```
+
+<Note>
+  Use `CommandContext<typeof YourCommand.options>` to get full type safety for your options.
+</Note>
+
+## String Options
+
+### Basic String Option
+
+```typescript
+import { createStringOption } from 'seyfert';
+
+@Options({
+  reason: createStringOption({
+    description: 'Reason for the action',
+    required: true,
+    min_length: 3,
+    max_length: 500
+  })
+})
+```
+
+### String with Choices
+
+```typescript
+import { createStringOption } from 'seyfert';
+
+@Options({
+  category: createStringOption({
+    description: 'Select a category',
+    required: true,
+    choices: [
+      { name: 'General', value: 'general' },
+      { name: 'Support', value: 'support' },
+      { name: 'Bug Report', value: 'bug' }
+    ]
+  })
+})
+```
+
+### String with Autocomplete
+
+```typescript
+import { createStringOption } from 'seyfert';
+
+@Options({
+  song: createStringOption({
+    description: 'Search for a song',
+    required: true,
+    autocomplete: async (interaction) => {
+      const query = interaction.getInput();
+      const results = await searchSongs(query);
+      
+      await interaction.respond(
+        results.map(song => ({
+          name: song.title,
+          value: song.id
+        }))
+      );
+    }
+  })
+})
+```
+
+<Tip>
+  Autocomplete functions receive an `AutocompleteInteraction` and should respond with up to 25 choices.
+</Tip>
+
+## Number Options
+
+### Integer Option
+
+```typescript
+import { createIntegerOption } from 'seyfert';
+
+@Options({
+  amount: createIntegerOption({
+    description: 'Amount to give',
+    required: true,
+    min_value: 1,
+    max_value: 1000
+  })
+})
+```
+
+### Number Option (Decimal)
+
+```typescript
+import { createNumberOption } from 'seyfert';
+
+@Options({
+  multiplier: createNumberOption({
+    description: 'Damage multiplier',
+    required: true,
+    min_value: 0.1,
+    max_value: 10.0
+  })
+})
+```
+
+### Number with Choices
+
+```typescript
+import { createIntegerOption } from 'seyfert';
+
+@Options({
+  duration: createIntegerOption({
+    description: 'Timeout duration',
+    required: true,
+    choices: [
+      { name: '1 minute', value: 60 },
+      { name: '5 minutes', value: 300 },
+      { name: '1 hour', value: 3600 },
+      { name: '1 day', value: 86400 }
+    ]
+  })
+})
+```
+
+## Boolean Options
+
+```typescript
+import { createBooleanOption } from 'seyfert';
+
+@Options({
+  public: createBooleanOption({
+    description: 'Make the response public',
+    required: false
+  })
+})
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<typeof MyCommand.options>) {
+    const isPublic = ctx.options.public ?? false;
+    
+    await ctx.write({
+      content: 'Response',
+      flags: isPublic ? undefined : MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## User Options
+
+```typescript
+import { createUserOption } from 'seyfert';
+
+@Options({
+  target: createUserOption({
+    description: 'The user to target',
+    required: true
+  })
+})
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<typeof MyCommand.options>) {
+    const user = ctx.options.target;
+    // user is UserStructure | InteractionGuildMemberStructure
+    
+    await ctx.write({
+      content: `Target: ${user.username}`
+    });
+  }
+}
+```
+
+## Channel Options
+
+### Basic Channel Option
+
+```typescript
+import { createChannelOption } from 'seyfert';
+
+@Options({
+  channel: createChannelOption({
+    description: 'Select a channel',
+    required: true
+  })
+})
+```
+
+### Filtered Channel Types
+
+```typescript
+import { createChannelOption } from 'seyfert';
+import { ChannelType } from 'seyfert/types';
+
+@Options({
+  channel: createChannelOption({
+    description: 'Select a text channel',
+    required: true,
+    channel_types: [ChannelType.GuildText, ChannelType.GuildAnnouncement]
+  })
+})
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<typeof MyCommand.options>) {
+    const channel = ctx.options.channel;
+    // channel is TextGuildChannelStructure | NewsChannelStructure
+  }
+}
+```
+
+## Role Options
+
+```typescript
+import { createRoleOption } from 'seyfert';
+
+@Options({
+  role: createRoleOption({
+    description: 'Select a role',
+    required: true
+  })
+})
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<typeof MyCommand.options>) {
+    const role = ctx.options.role;
+    // role is GuildRoleStructure
+    
+    await ctx.write({
+      content: `Selected role: ${role.name}`
+    });
+  }
+}
+```
+
+## Mentionable Options
+
+```typescript
+import { createMentionableOption } from 'seyfert';
+
+@Options({
+  target: createMentionableOption({
+    description: 'Select a user or role',
+    required: true
+  })
+})
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<typeof MyCommand.options>) {
+    const target = ctx.options.target;
+    // target is GuildRoleStructure | InteractionGuildMemberStructure | UserStructure
+  }
+}
+```
+
+## Attachment Options
+
+```typescript
+import { createAttachmentOption } from 'seyfert';
+
+@Options({
+  file: createAttachmentOption({
+    description: 'Upload a file',
+    required: true
+  })
+})
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<typeof MyCommand.options>) {
+    const attachment = ctx.options.file;
+    // attachment is Attachment
+    
+    await ctx.write({
+      content: `File: ${attachment.filename}\nSize: ${attachment.size} bytes\nURL: ${attachment.url}`
+    });
+  }
+}
+```
+
+## Option Validation
+
+Add custom validation logic using the `value` callback:
+
+```typescript
+import { createStringOption } from 'seyfert';
+
+@Options({
+  hex_color: createStringOption({
+    description: 'Enter a hex color code',
+    required: true,
+    value: async ({ value }, ok, fail) => {
+      const hexPattern = /^#?([A-Fa-f0-9]{6})$/;
+      
+      if (!hexPattern.test(value)) {
+        return fail('Invalid hex color. Use format: #RRGGBB');
+      }
+      
+      // Normalize the value
+      const normalized = value.startsWith('#') ? value : `#${value}`;
+      ok(normalized);
+    }
+  })
+})
+export default class ColorCommand extends Command {
+  async run(ctx: CommandContext<typeof ColorCommand.options>) {
+    const color = ctx.options.hex_color; // Guaranteed to be valid
+    await ctx.write({ content: `Color: ${color}` });
+  }
+}
+```
+
+### Advanced Validation
+
+```typescript
+import { createIntegerOption } from 'seyfert';
+
+@Options({
+  user_id: createIntegerOption({
+    description: 'Enter a user ID',
+    required: true,
+    value: async ({ context, value }, ok, fail) => {
+      try {
+        const user = await context.client.users.fetch(value.toString());
+        ok(user); // Return the full user object
+      } catch {
+        fail('User not found');
+      }
+    }
+  })
+})
+export default class MyCommand extends Command {
+  async run(ctx: CommandContext<typeof MyCommand.options>) {
+    const user = ctx.options.user_id; // UserStructure instead of number
+    await ctx.write({ content: `Found: ${user.username}` });
+  }
+}
+```
+
+## Handling Validation Errors
+
+```typescript
+export default class MyCommand extends Command {
+  async onOptionsError(ctx: CommandContext, metadata: OnOptionsReturnObject) {
+    const errors = Object.entries(metadata)
+      .filter(([_, data]) => data.failed)
+      .map(([name, data]) => `**${name}**: ${data.value}`)
+      .join('\n');
+    
+    await ctx.write({
+      content: `Validation failed:\n${errors}`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+```
+
+## Autocomplete Error Handling
+
+```typescript
+import { createStringOption } from 'seyfert';
+
+@Options({
+  item: createStringOption({
+    description: 'Search for an item',
+    required: true,
+    autocomplete: async (interaction) => {
+      const query = interaction.getInput();
+      const results = await searchItems(query);
+      
+      await interaction.respond(
+        results.map(item => ({
+          name: item.name,
+          value: item.id
+        }))
+      );
+    },
+    onAutocompleteError: async (interaction, error) => {
+      console.error('Autocomplete error:', error);
+      await interaction.respond([
+        { name: 'Error loading results', value: 'error' }
+      ]);
+    }
+  })
+})
+```
+
+## Required vs Optional
+
+```typescript
+import { createStringOption, createBooleanOption } from 'seyfert';
+
+@Options({
+  // Required option - user must provide this
+  message: createStringOption({
+    description: 'Message to send',
+    required: true
+  }),
+  // Optional option - can be undefined
+  silent: createBooleanOption({
+    description: 'Send silently',
+    required: false
+  })
+})
+export default class SendCommand extends Command {
+  async run(ctx: CommandContext<typeof SendCommand.options>) {
+    const message = ctx.options.message; // string
+    const silent = ctx.options.silent; // boolean | undefined
+    
+    await ctx.write({
+      content: message,
+      flags: silent ? MessageFlags.SuppressNotifications : undefined
+    });
+  }
+}
+```
+
+## Localization
+
+Add localized option names and descriptions:
+
+```typescript
+import { createStringOption } from 'seyfert';
+import { Locale } from 'seyfert/types';
+
+@Options({
+  message: createStringOption({
+    description: 'Message to send',
+    required: true,
+    name_localizations: {
+      [Locale.SpanishES]: 'mensaje',
+      [Locale.French]: 'message'
+    },
+    description_localizations: {
+      [Locale.SpanishES]: 'Mensaje a enviar',
+      [Locale.French]: 'Message à envoyer'
+    }
+  })
+})
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Type Safety">
+    Always use `CommandContext<typeof YourCommand.options>` to get full type checking:
+    
+    ```typescript
+    async run(ctx: CommandContext<typeof MyCommand.options>) {
+      // ctx.options is fully typed
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate User Input">
+    Use the `value` callback for custom validation:
+    
+    ```typescript
+    value: async ({ value }, ok, fail) => {
+      if (isValid(value)) {
+        ok(transformedValue);
+      } else {
+        fail('Validation error message');
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Provide Clear Descriptions">
+    Write clear, concise option descriptions that explain what the user should provide:
+    
+    Good: "The user to ban from the server"
+    
+    Bad: "user"
+  </Accordion>
+  
+  <Accordion title="Use Choices for Known Values">
+    When there's a limited set of valid values, use choices instead of free-form input:
+    
+    ```typescript
+    choices: [
+      { name: 'Low', value: 1 },
+      { name: 'Medium', value: 2 },
+      { name: 'High', value: 3 }
+    ]
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle Optional Options">
+    Always handle undefined values for optional options:
+    
+    ```typescript
+    const value = ctx.options.optional ?? defaultValue;
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat Commands" icon="comments" href="/commands/chat-commands">
+    Learn more about command structure
+  </Card>
+  <Card title="Decorators" icon="at" href="/commands/decorators">
+    Explore command decorators
+  </Card>
+  <Card title="Middleware" icon="filter" href="/commands/middleware">
+    Add middleware for validation
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle validation errors
+  </Card>
+</CardGroup>
